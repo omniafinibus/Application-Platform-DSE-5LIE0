@@ -1,0 +1,53 @@
+import "../../libraries/performance.poosl"
+
+import "ProcessorNode.poosl"
+import "EnergySource.poosl"
+import "NetworkOnChip.poosl"
+
+
+cluster class Platform(MaxEventTimeToLog: Real, NoC_BandwidthPerConnection: Real, NoC_ConnectionSetUpLatency: Real, 
+	Node_InternalBandwidth: Real, Node_InternalConnectionSetUpLatency: Real, PowerPerActiveConnection: Real, 
+	PowerPerStoredByte: Real, AccuracyCheckInterval : Real, 
+	Node1ProcessorType, Node2ProcessorType, Node3ProcessorType, Node4ProcessorType, Node5ProcessorType, Node6ProcessorType : String, 
+	OSPolicy1, OSPolicy2, OSPolicy3, OSPolicy4, OSPolicy5, OSPolicy6 : String, 
+	VSF1, VSF2, VSF3, VSF4, VSF5, VSF6 : Real)
+	
+ports 
+	CommunicationResources, 
+	ComputationResources
+	
+instances
+	Battery: EnergySource(MaxEventTimeToLog := MaxEventTimeToLog, AccuracyCheckInterval := AccuracyCheckInterval)
+
+	NoC: NetworkOnChip(BandwidthPerConnection := NoC_BandwidthPerConnection, ConnectionSetUpLatency := NoC_ConnectionSetUpLatency, 
+		MaxEventTimeToLog := MaxEventTimeToLog, NetworkName := "NoC", PowerPerActiveConnection := PowerPerActiveConnection, 
+		PowerPerStoredByte := PowerPerStoredByte, AccuracyCheckInterval := AccuracyCheckInterval)
+
+	Node1: ProcessorNode(CommunicationBandwidth := Node_InternalBandwidth, ConnectionSetUpLatency := Node_InternalConnectionSetUpLatency, 
+		MaxEventTimeToLog := MaxEventTimeToLog, NodeName := "Node1", OSPolicy := OSPolicy1, PowerPerActiveConnection := PowerPerActiveConnection, 
+		PowerPerStoredByte := PowerPerStoredByte, ProcessorType := Node1ProcessorType, VoltageScaleFactor := VSF1, AccuracyCheckInterval := AccuracyCheckInterval)
+
+	Node2: ProcessorNode(CommunicationBandwidth := Node_InternalBandwidth, ConnectionSetUpLatency := Node_InternalConnectionSetUpLatency, 
+		MaxEventTimeToLog := MaxEventTimeToLog, NodeName := "Node2", OSPolicy := OSPolicy2, PowerPerActiveConnection := PowerPerActiveConnection, 
+		PowerPerStoredByte := PowerPerStoredByte, ProcessorType := Node2ProcessorType, VoltageScaleFactor := VSF2, AccuracyCheckInterval := AccuracyCheckInterval)
+
+	Node3: ProcessorNode(CommunicationBandwidth := Node_InternalBandwidth, ConnectionSetUpLatency := Node_InternalConnectionSetUpLatency, 
+		MaxEventTimeToLog := MaxEventTimeToLog, NodeName := "Node3", OSPolicy := OSPolicy3, PowerPerActiveConnection := PowerPerActiveConnection, 
+		PowerPerStoredByte := PowerPerStoredByte, ProcessorType := Node3ProcessorType, VoltageScaleFactor := VSF3, AccuracyCheckInterval := AccuracyCheckInterval)
+		
+	Node4: ProcessorNode(CommunicationBandwidth := Node_InternalBandwidth, ConnectionSetUpLatency := Node_InternalConnectionSetUpLatency, 
+		MaxEventTimeToLog := MaxEventTimeToLog, NodeName := "Node4", OSPolicy := OSPolicy4, PowerPerActiveConnection := PowerPerActiveConnection, 
+		PowerPerStoredByte := PowerPerStoredByte, ProcessorType := Node4ProcessorType, VoltageScaleFactor := VSF4, AccuracyCheckInterval := AccuracyCheckInterval)
+		
+	Node5: ProcessorNode(CommunicationBandwidth := Node_InternalBandwidth, ConnectionSetUpLatency := Node_InternalConnectionSetUpLatency, 
+		MaxEventTimeToLog := MaxEventTimeToLog, NodeName := "Node5", OSPolicy := OSPolicy5, PowerPerActiveConnection := PowerPerActiveConnection, 
+		PowerPerStoredByte := PowerPerStoredByte, ProcessorType := Node5ProcessorType, VoltageScaleFactor := VSF5, AccuracyCheckInterval := AccuracyCheckInterval)
+		
+	Node6: ProcessorNode(CommunicationBandwidth := Node_InternalBandwidth, ConnectionSetUpLatency := Node_InternalConnectionSetUpLatency, 
+		MaxEventTimeToLog := MaxEventTimeToLog, NodeName := "Node6", OSPolicy := OSPolicy6, PowerPerActiveConnection := PowerPerActiveConnection, 
+		PowerPerStoredByte := PowerPerStoredByte, ProcessorType := Node6ProcessorType, VoltageScaleFactor := VSF6, AccuracyCheckInterval := AccuracyCheckInterval)
+		
+channels
+	{CommunicationResources, NoC.Communications, Node1.Communications, Node2.Communications, Node3.Communications, Node4.Communications, Node5.Communications, Node6.Communications } 
+	{ComputationResources, Node1.Computations, Node2.Computations, Node3.Computations, Node4.Computations, Node5.Computations, Node6.Computations }  
+	{Battery.Power, NoC.Power, Node1.Power, Node2.Power, Node3.Power, Node4.Power, Node5.Power, Node6.Power }

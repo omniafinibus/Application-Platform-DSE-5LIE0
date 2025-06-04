@@ -1,0 +1,133 @@
+import "../../libraries/xml.poosl"
+
+import "../../common/TraceObserver.poosl"
+import "BatteryStatus.poosl"
+
+/*
+ * process modelling the energy source of the platform in order to perform energy / power related statistics
+ */
+process class EnergySource (MaxEventTimeToLog: Real, AccuracyCheckInterval : Real)
+
+ports 
+	Power
+
+messages 
+	Power?StartConsumption(Real), 
+	Power?StopConsumption(Real)
+
+variables 
+	LogXMLDoc: XMLDocument, 
+	Logging: Boolean, 
+	Status: BatteryStatus,
+	TraceElement: XMLElement, 
+	TraceObserver : Observer
+
+init 
+	Initialise()()
+
+methods
+
+	/*
+	 * handle power consumption messages
+	 */
+	HandleConsumptions()() 
+		|Power: Real|
+		sel
+			// a new activity consuming power starts
+			Power?StartConsumption(Power){
+				// perform statistics in status object
+				Status startConsumption(Power, currentTime)};
+				LogStartPowerConsumption(Power)()
+		or
+			// a power consuming activity ends
+			Power?StopConsumption(Power){
+				// perform statistics in status object
+				Status stopConsumption(Power, currentTime)};
+				LogStopPowerConsumption(Power)()
+		les;
+		// start over
+		HandleConsumptions()()
+
+	/*
+	 * initialisation
+	 */
+	Initialise()()
+		// create the status data object
+		Status := new(BatteryStatus) init;
+		// create observer object to finalise the trace log
+		TraceObserver := new(TraceObserver) identifyWith("Battery_Trace") register;
+		
+		CreateLog()();
+		// perform activities...
+		par 
+			// handle power consumption messages
+			HandleConsumptions()() 
+		and
+			// periodically check accuracy of statistics  
+			CheckAccuracyStatus()() 
+		rap
+	
+	/*
+	 * periodically check accuracy of statistics
+	 */
+	CheckAccuracyStatus()()
+		delay AccuracyCheckInterval;
+			
+		if Status accurate not then
+			CheckAccuracyStatus()()
+		fi
+
+
+	/* 
+	 * the event trace is limited to a small initial part of a simulation.
+	 * check if further logging is required
+	 */
+	CheckContinueLog()()
+		if currentTime > MaxEventTimeToLog then
+			Logging := false;
+			CloseLog()()
+		fi
+		
+	/*
+	 * close the logging
+	 * write the results to file
+	 */
+	CloseLog()() 
+		| LogFile: FileOut |
+		LogFile := new (FileOut) destination("BatteryTrace.xml") open;
+		LogFile write(LogXMLDoc xmlString());
+		LogFile close;
+		// tell the simulator that we are good.
+		TraceObserver complete()
+		
+		
+	/*
+	 * create an XML doc to be filled with a trace of the node 
+	 */
+	CreateLog()()
+		Logging := true;
+		TraceElement := new(XMLElement) init("trace");
+		TraceElement addAttribute("name", "Battery");
+		LogXMLDoc := new(XMLDocument) init setElement(TraceElement)
+		
+	/*
+	 * log a power stop event
+	 */
+	LogStopPowerConsumption(Amount : Real)() 
+		| claimEl: XMLElement |
+		if Logging then
+			claimEl := new(XMLElement) init("power") addAttribute("difference", -Amount printString) addAttribute("time", currentTime printString());
+			TraceElement addElement(claimEl);
+			CheckContinueLog()()
+		fi
+		
+	/*
+	 * log a power start event
+	 */
+	LogStartPowerConsumption(Amount : Real)() 
+		| claimEl: XMLElement |
+		if Logging then
+			claimEl := new(XMLElement) init("power") addAttribute("difference", Amount printString) addAttribute("time", currentTime printString());
+			TraceElement addElement(claimEl);
+			CheckContinueLog()()
+		fi

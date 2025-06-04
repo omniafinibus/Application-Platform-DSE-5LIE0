@@ -1,0 +1,37 @@
+import "StorageUnit.poosl"
+import "CommunicationUnit.poosl"
+import "OperatingSystem.poosl"
+import "ProcessingUnit.poosl"
+
+cluster class ProcessorNode(CommunicationBandwidth: Real, ConnectionSetUpLatency: Real, MaxEventTimeToLog: Real, 
+	NodeName: String, OSPolicy: String, PowerPerActiveConnection: Real, PowerPerStoredByte: Real, ProcessorType: String, 
+	VoltageScaleFactor: Real, AccuracyCheckInterval : Real)
+	
+ports 
+	Communications, 
+	Computations, 
+	Power
+	
+instances
+	BufferMemory: StorageUnit(MaxEventTimeToLog := MaxEventTimeToLog, Name := "Buffer" + NodeName, PowerPerByte := PowerPerStoredByte, 
+		Type := "Buffer", AccuracyCheckInterval := AccuracyCheckInterval)
+	
+	DataMemory: StorageUnit(MaxEventTimeToLog := MaxEventTimeToLog, Name := "Data"  + NodeName, PowerPerByte := PowerPerStoredByte, 
+		Type := "Data", AccuracyCheckInterval := AccuracyCheckInterval)
+		
+	InterConnect: CommunicationUnit(BandwidthPerConnection := CommunicationBandwidth, ConnectionSetUpLatency := ConnectionSetUpLatency, 
+		MaxEventTimeToLog := MaxEventTimeToLog, NodeName := NodeName, PowerPerActiveConnection := PowerPerActiveConnection, 
+		AccuracyCheckInterval := AccuracyCheckInterval)
+	
+	OperatingSystem: OperatingSystem(MaxEventTimeToLog := MaxEventTimeToLog, NodeName := NodeName, Policy := OSPolicy)
+		
+	Processor: ProcessingUnit(NodeName := NodeName, Type := ProcessorType, VoltageScaleFactor := VoltageScaleFactor, 
+		AccuracyCheckInterval := AccuracyCheckInterval)
+
+channels
+	{BufferMemory.Access, InterConnect.Memory} 
+	{Communications, InterConnect.Communications} 
+	{Computations, OperatingSystem.Task} 
+	{DataMemory.Access, Processor.Memory}  
+	{Power, BufferMemory.Power, DataMemory.Power, InterConnect.Power, Processor.Power} 
+	{OperatingSystem.Processor, Processor.OS}

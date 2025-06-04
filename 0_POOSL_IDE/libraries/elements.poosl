@@ -1,0 +1,33 @@
+// --- Element Classes --- 
+
+// Element (Abstract super class used by Map, Queue, Stack, Bag, Set, Sequence)
+
+data class Element extends Object
+variables Next, Previous: Element
+methods
+	// Methods for implementation
+	next : Element
+		return Next
+	previous : Element
+		return Previous
+	setNext(E: Element) : Element
+		Next := E;
+		return self
+	setPrevious(E: Element) : Element
+		Previous := E;
+		return self
+
+
+// Structure Element (Used by Queue, Stack and super class for Bag, Set, Sequence)
+
+data class StructureElement extends Element
+variables Element: Object
+methods
+	// Methods for implementation
+	element : Object
+		return Element
+	setElement(E: Object) : Element
+		Element := E;
+		return self
+	printString : String
+		return Element printString

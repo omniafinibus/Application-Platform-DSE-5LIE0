@@ -1,0 +1,212 @@
+import "Task.poosl"
+import "MarkovChain.poosl"
+
+/* Task 1, the source task in the graph, implements the scenario decisions and communication on all control channels */
+process class Task1 (MapTo: String, Name: String, Priority: Integer, ThroughputConstraint: Real)
+
+ports 
+	// to the control channels
+	C_G1_T2, C_G2_T3, C_G3_T4, C_G4_T5, C_G5_T6, C_G6_T7, C_G7_T8, C_G8_T9, C_G9_T10, C_G10_T11
+	// to the data channels 
+	D_F1_T2, D_F2_T3, D_F3_T4, In_F16_T11,
+	// to the platform side
+	Computation
+	
+messages 
+	C_G1_T2!MappedTo(String), C_G1_T2?ReservationSuccessful(), C_G1_T2!ReserveRoom(Integer, Integer), C_G1_T2!WriteTokens(String, Integer),
+	C_G2_T3!MappedTo(String), C_G2_T3?ReservationSuccessful(), C_G2_T3!ReserveRoom(Integer, Integer), C_G2_T3!WriteTokens(String, Integer),
+	C_G3_T4!MappedTo(String), C_G3_T4?ReservationSuccessful(), C_G3_T4!ReserveRoom(Integer, Integer), C_G3_T4!WriteTokens(String, Integer),
+	C_G4_T5!MappedTo(String), C_G4_T5?ReservationSuccessful(), C_G4_T5!ReserveRoom(Integer, Integer), C_G4_T5!WriteTokens(String, Integer),
+	C_G5_T6!MappedTo(String), C_G5_T6?ReservationSuccessful(), C_G5_T6!ReserveRoom(Integer, Integer), C_G5_T6!WriteTokens(String, Integer),
+	C_G6_T7!MappedTo(String), C_G6_T7?ReservationSuccessful(), C_G6_T7!ReserveRoom(Integer, Integer), C_G6_T7!WriteTokens(String, Integer),
+	C_G7_T8!MappedTo(String), C_G7_T8?ReservationSuccessful(), C_G7_T8!ReserveRoom(Integer, Integer), C_G7_T8!WriteTokens(String, Integer),
+	C_G8_T9!MappedTo(String), C_G8_T9?ReservationSuccessful(), C_G8_T9!ReserveRoom(Integer, Integer), C_G8_T9!WriteTokens(String, Integer),
+	C_G9_T10!MappedTo(String), C_G9_T10?ReservationSuccessful(), C_G9_T10!ReserveRoom(Integer, Integer), C_G9_T10!WriteTokens(String, Integer),
+	C_G10_T11!MappedTo(String), C_G10_T11?ReservationSuccessful(), C_G10_T11!ReserveRoom(Integer, Integer), C_G10_T11!WriteTokens(String, Integer),
+	Computation!Execute(String, String, Integer, Integer, String), Computation?ExecutionCompleted(String),
+	Computation!Use(String), D_F1_T2!MappedTo(String), D_F1_T2?ReservationSuccessful(), D_F1_T2!ReserveRoom(Integer, Integer),
+	D_F1_T2!WriteTokens(), 
+	D_F2_T3!MappedTo(String), D_F2_T3?ReservationSuccessful(), D_F2_T3!ReserveRoom(Integer, Integer),
+	D_F2_T3!WriteTokens(), 
+	D_F3_T4!MappedTo(String), D_F3_T4?ReservationSuccessful(), D_F3_T4!ReserveRoom(Integer, Integer),
+	D_F3_T4!WriteTokens(), 
+	In_F16_T11!InspectTokenAvailability(Integer), In_F16_T11!MappedTo(String), In_F16_T11!ReleaseRoom(),
+	In_F16_T11?TokensAvailable()
+	
+variables
+	// the Markov chain to model the scenario changes 
+	MarkovChain: MarkovChain,
+	// firing period according to the throughput constraint
+	FiringPeriod: Real
+
+init 
+	Initialise()()
+
+methods
+
+	/*
+	 * Initialisation
+	 */
+	Initialise()()
+		// compute the firing period
+		FiringPeriod := 1.0 / ThroughputConstraint;
+		// notify the attached buffers and the platform about the mapping
+		NotifyBuffersAboutMapping()();
+		NotifyPlatformAboutMapping()();
+		// Create the Markov chain
+		{MarkovChain := new(MarkovChain) init;
+			MarkovChain addState("S1");
+			// with probability 3/4 stay in S1 and with probability 1/4 go to S2
+		   	MarkovChain addTransition("S1", "S1", 0.0, 3.0/4.0);
+   			MarkovChain addTransition("S1", "S2", 3.0/4.0, 1.0);
+			MarkovChain addState("S2");
+			// with probability 5/8 stay in S2 and with probability 3/8 go to S1
+   			MarkovChain addTransition("S2", "S2", 0.0, 5.0/8.0);
+   			MarkovChain addTransition("S2", "S1", 5.0/8.0, 1.0);
+			MarkovChain setInitialState("S1")};
+		// start firing
+		Fire(0)()
+
+	/*
+	 * check availability of input tokens
+	 */
+	CheckTokenAvailabilityForReads(Scenario: String)()
+		In_F16_T11!InspectTokenAvailability(1);
+		In_F16_T11?TokensAvailable
+
+	/*
+	 * execute the task
+	 */
+	Execute(Scenario: String, Iteration: Integer)() 
+		| N: String |
+		// execute on the platform
+		Computation!Execute(Name, Scenario, Iteration, Priority, MapTo);
+		Computation?ExecutionCompleted(N | N = Name)
+
+	/*
+	 * repeatedly execute the firing sequence
+	 */
+	Fire(Iteration: Integer)() 
+		| Scenario: String, ReleaseTime, t: Real |
+		// update the scenario for the next firing
+		Scenario := MarkovChain getNextScenario;
+		// just checking to be sure...
+		if MarkovChain hasState(Scenario) not then Scenario := new(Object) error("Unknown scenario: " + Scenario + " in Task1 method Fire()().") fi;
+		// check token availability
+		CheckTokenAvailabilityForReads(Scenario)();
+		// reserve space in output buffers
+		ReserveSpaceForWrites(Scenario, Iteration)();
+		// wait for release time
+		ReleaseTime := Iteration asReal * FiringPeriod;
+		if currentTime < ReleaseTime then
+			delay ReleaseTime - currentTime
+		fi;
+		// execute
+		Execute(Scenario, Iteration)();
+		// release the space from input buffers
+		ReleaseSpaceForReads(Scenario)();
+		// execute the writes
+		PerformWrites(Scenario, Iteration)();
+		// continue with the next firing
+		Fire(Iteration + 1)()
+
+	/* 
+	 * communicate the mapping to the attached buffers
+	 */
+	NotifyBuffersAboutMapping()()
+		par
+			In_F16_T11! MappedTo(MapTo)
+		and
+			D_F1_T2!MappedTo(MapTo)
+		and
+			D_F2_T3!MappedTo(MapTo)
+		and
+			D_F3_T4!MappedTo(MapTo)
+		and
+			C_G1_T2!MappedTo(MapTo)
+		and
+			C_G2_T3!MappedTo(MapTo)
+		and
+			C_G3_T4!MappedTo(MapTo)
+		and
+			C_G4_T5!MappedTo(MapTo)
+		and
+			C_G5_T6!MappedTo(MapTo)
+		and
+			C_G6_T7!MappedTo(MapTo)
+		and
+			C_G7_T8!MappedTo(MapTo)
+		and
+			C_G8_T9!MappedTo(MapTo)
+		and
+			C_G9_T10!MappedTo(MapTo)
+		and
+			C_G10_T11!MappedTo(MapTo)
+		rap
+
+	/* 
+	 * notify the platform about the mapping
+	 */
+	NotifyPlatformAboutMapping()()
+		Computation!Use(MapTo)
+
+	/*
+	 * execute all writes
+	 */
+	PerformWrites(Scenario: String, Iteration: Integer)()
+		// write data tokens
+		D_F1_T2!WriteTokens;
+		D_F2_T3!WriteTokens;
+		if Scenario = "S2" then
+			D_F3_T4!WriteTokens
+		fi;
+		// write all control tokens
+		C_G1_T2!WriteTokens(Scenario, Iteration);
+		C_G2_T3!WriteTokens(Scenario, Iteration);
+		C_G3_T4!WriteTokens(Scenario, Iteration);
+		C_G4_T5!WriteTokens(Scenario, Iteration);
+		C_G5_T6!WriteTokens(Scenario, Iteration);
+		C_G6_T7!WriteTokens(Scenario, Iteration);
+		C_G7_T8!WriteTokens(Scenario, Iteration);
+		C_G8_T9!WriteTokens(Scenario, Iteration);
+		C_G9_T10!WriteTokens(Scenario, Iteration);
+		C_G10_T11!WriteTokens(Scenario, Iteration)
+
+	/*
+	 * release space in input buffers
+	 */
+	ReleaseSpaceForReads(Scenario: String)()
+		In_F16_T11!ReleaseRoom
+
+	/*
+	 * reserve space for writing in output buffers
+	 */
+	ReserveSpaceForWrites(Scenario: String, Iteration: Integer)()
+		D_F1_T2!ReserveRoom(1, Iteration); 
+		D_F1_T2?ReservationSuccessful;
+		D_F2_T3!ReserveRoom(1, Iteration);
+		D_F2_T3?ReservationSuccessful;
+		if Scenario = "S2" then
+			D_F3_T4!ReserveRoom(1, Iteration);
+			D_F3_T4?ReservationSuccessful
+		fi;
+		C_G1_T2!ReserveRoom(1, Iteration);
+		C_G1_T2?ReservationSuccessful;
+		C_G2_T3!ReserveRoom(1, Iteration);
+		C_G2_T3?ReservationSuccessful;
+		C_G3_T4!ReserveRoom(1, Iteration);
+		C_G3_T4?ReservationSuccessful;
+		C_G4_T5!ReserveRoom(1, Iteration);
+		C_G4_T5?ReservationSuccessful;
+		C_G5_T6!ReserveRoom(1, Iteration);
+		C_G5_T6?ReservationSuccessful;
+		C_G6_T7!ReserveRoom(1, Iteration);
+		C_G6_T7?ReservationSuccessful;
+		C_G7_T8!ReserveRoom(1, Iteration);
+		C_G7_T8?ReservationSuccessful;
+		C_G8_T9!ReserveRoom(1, Iteration);
+		C_G8_T9?ReservationSuccessful;
+		C_G9_T10!ReserveRoom(1, Iteration);
+		C_G9_T10?ReservationSuccessful;
+		C_G10_T11!ReserveRoom(1, Iteration);
+		C_G10_T11?ReservationSuccessful

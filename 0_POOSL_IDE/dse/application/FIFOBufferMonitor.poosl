@@ -1,0 +1,61 @@
+import "../../libraries/performance.poosl"
+
+/*
+ * Common abstract superclass of ControlBufferMonitor and DataBufferMonitor
+ * Factoring out common behavior
+ */
+data class FIFOBufferMonitor extends Object
+
+variables 
+	Name: String,				// name of the FIFO buffer 
+	AvailableTokens: Integer, 	// available tokens in the buffer
+	BufferSize: Integer, 		// size of the buffer in tokens
+	ReservedLocations: Integer,	// places reserved to write tokens
+	TokenSize: Integer 			// size of a token in bytes
+	
+methods
+
+	/*
+	 * initialize the buffer monitor
+	 * N: 	name
+	 * BS: 	buffer size, <1 means unbounded buffer
+	 * TS:	token size
+	 */
+	init(N: String, BS, TS: Integer) : FIFOBufferMonitor
+		Name := N; 
+		BufferSize := BS; 
+		TokenSize := TS; 
+		AvailableTokens := 0; 
+		ReservedLocations := 0;
+		return self
+	
+	/*
+	 * reserve NumberOfTokens space in the buffer to write
+	 * assumes it is only called when there is enough space 
+	 */
+	reserve(NumberOfTokens: Integer) : FIFOBufferMonitor 
+		ReservedLocations := ReservedLocations + NumberOfTokens; 
+		return self
+
+	/*
+	 * check if there is enough free room in the buffer for NumberOfToken tokens
+	 */
+	room(NumberOfTokens: Integer) : Boolean
+		if BufferSize > 0 then
+   			return ReservedLocations + AvailableTokens + NumberOfTokens <= BufferSize
+		else
+   			return  true
+		fi
+
+	/*
+	 * write NumberOfTokens tokens to the buffer
+	 * assumes that the space has been reserved before
+	 */
+	write(NumberOfTokens: Integer) : FIFOBufferMonitor
+		ReservedLocations := ReservedLocations - NumberOfTokens;
+		AvailableTokens := AvailableTokens + NumberOfTokens;
+		// some sanity check to see if a buffer is overflowing
+		if AvailableTokens > 100 then
+			self error("This buffer (" + Name + ") contains more than 100 tokens now. It appears to be overflowing, there may be something wrong in the model!")
+		fi;
+		return self

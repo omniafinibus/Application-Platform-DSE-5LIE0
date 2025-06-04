@@ -1,0 +1,49 @@
+import "Task.poosl"
+
+process class Task10 extends Task
+
+ports 
+	In1_F12_T7, 
+	In2_F13_T8, 
+	Out_F15_T11
+	
+messages 
+	Control!MappedTo(String), In1_F12_T7!InspectTokenAvailability(Integer), In1_F12_T7!MappedTo(String), In1_F12_T7!ReleaseRoom(),
+	In1_F12_T7?TokensAvailable(), In2_F13_T8!InspectTokenAvailability(Integer), In2_F13_T8!MappedTo(String), In2_F13_T8!ReleaseRoom(),
+	In2_F13_T8?TokensAvailable(), Out_F15_T11!MappedTo(String), Out_F15_T11?ReservationSuccessful(), Out_F15_T11!ReserveRoom(Integer, Integer),
+	Out_F15_T11!WriteTokens()
+
+variables	
+
+init 
+	Initialise()()
+
+methods
+
+	CheckTokenAvailabilityForReads(Scenario: String)()
+		In1_F12_T7!InspectTokenAvailability(1);
+		In1_F12_T7?TokensAvailable;
+		In2_F13_T8!InspectTokenAvailability(1);
+		In2_F13_T8?TokensAvailable
+
+	NotifyBuffersAboutMapping()()
+		par
+			In1_F12_T7!MappedTo(MapTo)
+		and
+			In2_F13_T8!MappedTo(MapTo)
+		and
+			Out_F15_T11!MappedTo(MapTo)
+		and
+			Control!MappedTo(MapTo)
+		rap
+
+	PerformWrites(Scenario: String)()
+		Out_F15_T11!WriteTokens
+
+	ReleaseSpaceForReads(Scenario: String)()
+		In1_F12_T7!ReleaseRoom;
+		In2_F13_T8!ReleaseRoom
+
+	ReserveSpaceForWrites(Scenario: String, Iteration: Integer)()
+		Out_F15_T11!ReserveRoom(1, Iteration);
+		Out_F15_T11?ReservationSuccessful

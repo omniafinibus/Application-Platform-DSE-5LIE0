@@ -1,0 +1,133 @@
+import "Task.poosl"
+import "ApplicationStatus.poosl"
+
+/* Task 9, the last task in the task graph includes additional statistical analysis of performance data */
+process class Task11 (ThroughputConstraint: Real, LatencyBound: Real, 
+	AccuracyCheckInterval : Real, GlobalTimeOut: Real) extends Task
+
+ports 
+	In1_F14_T9, 
+	In2_F15_T10, 
+	Out_F16_T1
+	
+messages 
+	Control!MappedTo(String), In1_F14_T9?TokensAvailable(), In1_F14_T9!InspectTokenAvailability(Integer), In1_F14_T9!MappedTo(String),
+	In1_F14_T9!ReleaseRoom(), 
+	In2_F15_T10?TokensAvailable(), In2_F15_T10!InspectTokenAvailability(Integer), In2_F15_T10!MappedTo(String),
+	In2_F15_T10!ReleaseRoom(), 
+	Out_F16_T1?ReservationSuccessful(), Out_F16_T1!MappedTo(String), Out_F16_T1!ReserveRoom(Integer, Integer), Out_F16_T1!WriteTokens()
+	
+variables 
+	Status: ApplicationStatus
+	
+init 
+	Initialise()()
+
+methods
+
+	/*
+	 * Initialization
+	 */
+	Initialise()()
+		| TimeString: String |
+		// communicate mapping information to connected buffers and to platform
+		NotifyBuffersAboutMapping()();
+		NotifyPlatformAboutMapping()();
+		// create a status object to monitor application performance
+		Status := new(ApplicationStatus) init(ThroughputConstraint, LatencyBound);
+		abort
+			// concurrently fire and periodically check the statistical accuracy
+			par 
+				Fire()() 
+			and 
+				CheckAccuracyStatus()() 
+			rap
+		with 
+			// check overall timeout 
+			delay GlobalTimeOut;
+			TimeString := GlobalTimeOut asInteger printString;
+			nil error("Statistical estimates did not converge within " + TimeString + " time units. There may be something wrong in your model.")
+
+
+	/*
+	 * check whether the statistics are sufficiently accurate
+	 */
+	CheckAccuracyStatus()()
+		// check accuracy once every AccuracyCheckInterval time units
+		delay AccuracyCheckInterval;
+		// check if the statistics are accurate
+		if Status accurate then
+			Status complete
+		else
+			// check again
+			CheckAccuracyStatus()()
+		fi
+			
+	/*
+	 * check availability of tokens to read
+	 */
+	CheckTokenAvailabilityForReads(Scenario: String)()
+		In1_F14_T9!InspectTokenAvailability(1);
+		In1_F14_T9?TokensAvailable;
+		In2_F15_T10!InspectTokenAvailability(1);
+		In2_F15_T10?TokensAvailable
+
+	/*
+	 * repetitively execute the firing sequence
+	 */
+	Fire()() 
+		| Scenario: String, Iteration: Integer |
+		// read the scenario from the control channel
+		Control!InspectTokenAvailability;
+		Control?TokenAvailable(Scenario, Iteration);
+		// check availability of input data for the current Scenario
+		CheckTokenAvailabilityForReads(Scenario)();
+		// reserve the space in the output buffers for writing
+		ReserveSpaceForWrites(Scenario, Iteration)();
+		// execute the task
+		Execute(Scenario, Iteration)();
+		// release the space in the buffers
+		ReleaseSpaceForReads(Scenario)();
+		// write the output data
+		PerformWrites(Scenario)();
+		// tell the platform to release the memory
+		Control!ReleaseRoom;
+		// update the status for a completed firing
+		Status fired(currentTime);
+		// start the firing sequence again
+		Fire()()
+		
+	/*
+	 * tell the connected buffers about our mapping
+	 */
+	NotifyBuffersAboutMapping()()
+		par
+			In1_F14_T9!MappedTo(MapTo)
+		and
+			In2_F15_T10!MappedTo(MapTo)
+		and
+			Out_F16_T1!MappedTo(MapTo)
+		and
+			Control!MappedTo(MapTo)
+		rap
+	
+	/*
+	 * perform the writes to output port
+	 */
+	PerformWrites(Scenario: String)()
+		Out_F16_T1!WriteTokens
+	
+	/* 
+	 * release the space in the input buffers
+	 */
+	ReleaseSpaceForReads(Scenario: String)()
+		In1_F14_T9!ReleaseRoom;
+		In2_F15_T10!ReleaseRoom
+	
+	/*
+	 * reserve space in output buffers
+	 */
+	ReserveSpaceForWrites(Scenario: String, Iteration: Integer)()
+		Out_F16_T1!ReserveRoom(1, Iteration);
+		Out_F16_T1?ReservationSuccessful
+		

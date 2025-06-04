@@ -1,0 +1,93 @@
+/*
+ * Task models a task of the task graph, it is bound to a processor on the platform. It has a name and
+ * a priority for scheduling.
+ * Specific Task instances have their own classes derived from Task
+ */
+process class Task(MapTo : String, Name : String, Priority : Integer)
+
+ports 
+	Computation, Control
+
+messages 
+	Computation!Use(String), 
+	Computation!Execute(String, String, Integer, Integer, String),
+	Computation?ExecutionCompleted(String), 
+	Control?TokenAvailable(String, Integer),
+	Control!InspectTokenAvailability(), 
+	Control!ReleaseRoom()
+	
+variables
+
+init 
+	Initialise()()
+
+methods
+	/*
+	 * initialisation creates the mapping links to the platform
+	 */
+	Initialise()()
+		NotifyBuffersAboutMapping()();
+		NotifyPlatformAboutMapping()();
+		// start the firing behavior
+		Fire()()
+	
+	/*
+	 * Release space in the input buffers
+	 * override in subclasses depending on the inputs 
+	 */
+	ReleaseSpaceForReads(Scenario: String)()
+		nil error("this method should be overridden in subclasses")
+	
+	/*
+	 * Release space in the output buffers
+	 * override in subclasses depending on the outputs 
+	 */
+	ReserveSpaceForWrites(Scenario: String, Iteration: Integer)()
+		nil error("this method should be overridden in subclasses")
+
+	/*
+	 * realize the mapping to the platform
+	 */
+	NotifyPlatformAboutMapping()()
+		Computation!Use(MapTo)
+
+	NotifyBuffersAboutMapping()()
+		nil error("this method should be overridden in subclasses")
+
+	/*
+	 * Check for tokens in the input buffers
+	 * override in subclasses depending on the inputs 
+	 */
+	CheckTokenAvailabilityForReads(Scenario: String)()
+		nil error("this method should be overridden in subclasses")
+
+	/* 
+	 * The firing sequence
+	 */
+	Fire()() 
+		|Scenario: String, Iteration: Integer|
+		Control!InspectTokenAvailability;
+		Control?TokenAvailable(Scenario, Iteration);
+		CheckTokenAvailabilityForReads(Scenario)();
+		ReserveSpaceForWrites(Scenario, Iteration)();
+		Execute(Scenario, Iteration)();
+		ReleaseSpaceForReads(Scenario)();
+		PerformWrites(Scenario)();
+		Control!ReleaseRoom;
+		Fire()()
+	
+	/* 
+	 * write the outputs
+	 * override in subclasses depending on the outputs 
+	 */
+	PerformWrites(Scenario : String)()
+		nil error("this method should be overridden in subclasses")
+
+	/*
+	 * Execute the task on the platform
+	 */	
+	Execute(Scenario : String, Iteration: Integer)() 
+		| N : String |
+		Computation!Execute(Name, Scenario, Iteration, Priority, MapTo);
+		Computation?ExecutionCompleted(N | N = Name)
+		

@@ -1,0 +1,110 @@
+import "../../libraries/performance.poosl"
+
+/*
+ * Class to collect statistical data about power and energy in the platform
+ */
+data class BatteryStatus extends LongRunTimeAverage
+
+variables 
+	// the number of samples that have been registers
+	NumberOfSamples: Integer, 
+	// the overall average amount of energy consumption per sample epoch  
+	ObservedAverageEnergyPerEpoch: Real, 
+	// the average amount of time between samples
+	ObservedAverageTime: Real, 
+	// the largest amount of instantaneous power observed
+	PeakPower: Real,
+	// current power consumption
+	Power: Real,
+	// time of the previous sample 
+	PreviousUpdateTime: Real
+	
+methods
+
+	/*
+	 * initialisation
+	 */
+	init : BatteryStatus
+		self withParameters(0.95, 0.95) logTo("Battery"); // Initialize LongRunTimeAverage to keep track of the estimated average power interval
+		self setBatchSize(100);
+		Power := 0.0;
+		PeakPower := 0.0;
+		
+		NumberOfSamples := 0;
+		ObservedAverageEnergyPerEpoch := 0.0;
+		ObservedAverageTime := 0.0;
+		PreviousUpdateTime := 0.0;
+		return self
+
+	/* 
+	 * log results to file
+	 */		
+	log : BatteryStatus 
+		| BatteryLogFile : FileOut | 
+		BatteryLogFile := new(FileOut) destination("Battery.log") open;
+		BatteryLogFile write("Peak Power Consumption: " + PeakPower printString + " Watts\n\n");
+		// depending on how many samples we have give a simple estimate, or proper statistics 
+		if (NumberOfSamples < 20000) then
+  			BatteryLogFile write("Observed Average Power: " + (ObservedAverageEnergyPerEpoch / ObservedAverageTime) printString + " Watts")
+		else
+  			BatteryLogFile write("Statistics for Average Power Consumption:\n" + self logStatistics)
+		fi;
+		BatteryLogFile close;
+		return self
+		
+	/*
+	 * generate a textual representation of the object for inspection
+	 */
+	printString : String 
+		|PrintString: String|
+		PrintString := "Current Power Consumption: " + Power printString + " Watts\n\nPeak Power Consumption: " + PeakPower printString + " Watts\n\n";
+		if (NumberOfSamples < 20000) then
+  			PrintString := PrintString + "Observed Average Power: " + (ObservedAverageEnergyPerEpoch / ObservedAverageTime) printString + " Watts"
+		else
+  			PrintString := PrintString + "Statistics for Average Power Consumption:\n" + self printStatistics
+		fi;
+		return PrintString
+
+	/*
+	 * update the statistic for the epoch up to the new change
+	 */
+	updatePowerConsumption(CurrentTime : Real) : BatteryStatus 
+		| Factor : Real |
+		// a new sample has been received
+		NumberOfSamples := NumberOfSamples + 1;
+		// factor to facilitate computation of new averages
+		Factor := (NumberOfSamples - 1) asReal / NumberOfSamples asReal;
+		// compute the new average amount of energy per epoch taking the last epoch into account
+		ObservedAverageEnergyPerEpoch := (Factor * ObservedAverageEnergyPerEpoch) + (Power *(CurrentTime - PreviousUpdateTime)) / NumberOfSamples asReal;
+		// compute the new average duration of an epoch
+		ObservedAverageTime := (Factor * ObservedAverageTime) + (CurrentTime - PreviousUpdateTime) / NumberOfSamples asReal;
+		// update time of the last sample
+		PreviousUpdateTime := CurrentTime;
+		return self
+
+		
+	/*
+	 * log an increase of power consumption of P Watts starting at CurrentTime
+	 * CurrentTime is assumed to be no sooner than PreviousUpdateTime
+	 */
+	startConsumption(P, CurrentTime : Real) : BatteryStatus 
+		if CurrentTime > PreviousUpdateTime then self updatePowerConsumption(CurrentTime) fi;
+		Power := Power + P;
+		// keep track of the maximum power consumption observed
+		if Power > PeakPower then
+			PeakPower := Power
+		fi;
+		// log the change to the LongRunTieAverageperformance monitor from which this class inherits
+		self rewardBM(Power, CurrentTime);
+		return self
+		
+	/*
+	 * log an decrease of power consumption of P Watts starting at CurrentTime
+	 * CurrentTime is assumed to be no sooner than PreviousUpdateTime
+	 */
+	stopConsumption(P, CurrentTime : Real) : BatteryStatus 
+		if CurrentTime > PreviousUpdateTime then self updatePowerConsumption(CurrentTime) fi;
+		Power := Power - P;
+		self rewardBM(Power, CurrentTime);
+		return self
+		

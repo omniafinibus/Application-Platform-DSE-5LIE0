@@ -1,0 +1,105 @@
+import "../../libraries/performance.poosl"
+import "../../common/TraceObserver.poosl"
+
+
+/*
+ * Measures all statistics from the application, in particular, throughput and latency 
+ */
+data class ApplicationStatus extends Object
+
+variables 
+	ThroughputConstraint: Real, 
+	Period: Real,
+	NumberOfFirings: Integer, 
+	Throughput: LongRunRateAverage, 
+	Latency: LongRunSampleAverage, 
+	LatencyBound: Real,
+	TimeOfLastFiring: Real
+	
+methods
+
+	/*
+	 * initialisation must be called first
+	 * TC: throughput constraint
+	 * LB: latency bound to detect diverging latency
+	 */
+	init(TC: Real, LB: Real) : ApplicationStatus
+		NumberOfFirings := 0;
+		ThroughputConstraint := TC;
+		Period := 1.0 / TC;
+		LatencyBound := LB;
+		TimeOfLastFiring := 0.0;
+		Throughput := new(LongRunRateAverage) withParameters(0.95, 0.95) setBatchSize(100) logTo("ApplicationThroughput");
+		Latency := new(LongRunSampleAverage) withParameters(0.95, 0.95) setBatchSize(100) logTo("ApplicationLatency");
+		return self
+
+	/*
+	 * check if the statistics are sufficiently accurate
+	 */
+	accurate : Boolean
+		return Throughput accurate & Latency accurate
+
+	/*
+	 * update statistics with respect to a completed firing of Task 8 that has just occurred
+	 */
+	fired(CurrentTime: Real) : ApplicationStatus
+		| ReleaseTime, FiringLatency: Real |
+		Throughput rewardBM(1.0, CurrentTime);
+		ReleaseTime := NumberOfFirings asReal * Period;
+		FiringLatency := CurrentTime - ReleaseTime;
+		if FiringLatency > LatencyBound then self error("Latency is diverging. Throughput constraint is not met.") fi;
+		Latency rewardBM(FiringLatency);
+		NumberOfFirings := NumberOfFirings + 1;
+		TimeOfLastFiring := CurrentTime;
+		return self
+
+	/*
+	 * register the statistical monitors as ready
+	 */	
+	complete() : ApplicationStatus
+		// write to file
+		self log;
+		Throughput complete();
+		Latency complete();
+		return self
+	
+	/*
+	 * Halt the simulation
+	 */
+	halt() : ApplicationStatus
+		self log;
+		Throughput halt();
+		return self
+	
+	/*
+	 * write the log files
+	 */
+	log : ApplicationStatus 
+		|LogFile: FileOut|
+		LogFile := new(FileOut) destination("Application.log") open;
+		if NumberOfFirings = 0 then
+	   		LogFile write("The output actor never fired!")
+		else
+			if NumberOfFirings = 1 then
+	   			LogFile write("Throughput Results: " lf + Throughput logStatistics lf lf + "Latency: " + TimeOfLastFiring printString)
+			else
+	   			LogFile write("Throughput Results: " lf + Throughput logStatistics lf lf + "Latency Results: " lf + Latency logStatistics lf lf)
+			fi
+		fi;
+		LogFile close;
+		return self
+	
+	/* 
+	 * create a textual representation of the status
+	 */
+	printString : String
+		if NumberOfFirings > 0 then
+   			if NumberOfFirings = 1 then
+   		   		return("Throughput Results: " lf + Throughput logStatistics lf lf + "Latency: " + TimeOfLastFiring printString)
+   			else
+      			return("Throughput Results: " lf + Throughput logStatistics lf lf + "Latency Results: " lf + Throughput logStatistics lf lf)
+   			fi
+		else
+   			return("Waiting for first frame")
+		fi
+		

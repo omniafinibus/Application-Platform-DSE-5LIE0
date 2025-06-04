@@ -1,0 +1,84 @@
+import "../../libraries/performance.poosl"
+
+
+/*
+ * Class to collect statistical data about communication in the platform
+ */
+data class CommunicationStatus extends LongRunTimeAverage
+
+variables 
+	MaximumNumberOfConcurrentConnections: Integer, 
+	ActiveConnections: Set, 
+	NumberOfConcurrentConnections: Integer
+	
+methods
+
+	/* 
+	 * register the activation of a new connection
+	 */
+	activate(Connection: String, CurrentTime: Real) : CommunicationStatus
+		// add it to the set of active connections
+		ActiveConnections add(Connection);
+		// count the number of active connections
+		NumberOfConcurrentConnections := NumberOfConcurrentConnections + 1;
+		// keep track of the maximum number of connections
+		if NumberOfConcurrentConnections > MaximumNumberOfConcurrentConnections then MaximumNumberOfConcurrentConnections := NumberOfConcurrentConnections fi;
+		// register the number of connections to the LongRunTimeAverage statistical monitor from which this class inherits to perform its statistics
+		self rewardBM(NumberOfConcurrentConnections, CurrentTime);
+		return self
+
+	/*
+	 * get the current number of connections
+	 */
+	numberOfConcurrentConnections() :Integer
+		return NumberOfConcurrentConnections
+
+	/*
+	 * register the termination of a connection
+	 */
+	deactivate(Connection: String, CurrentTime: Real) : CommunicationStatus
+		// remove it from the set
+		ActiveConnections remove(Connection);
+		// adjust the counter
+		NumberOfConcurrentConnections := NumberOfConcurrentConnections - 1;
+		// register the number of connections to the LongRunTimeAverage statistical monitor from which this class inherits to perform its statistics
+		self rewardBM(NumberOfConcurrentConnections, CurrentTime);
+		return self
+
+	/*
+	 * test if the given connection is not active
+	 */
+	inactive(Connection: String) : Boolean
+		return ActiveConnections excludes(Connection)
+
+	/*
+	 * initialisation
+	 */
+	init : CommunicationStatus
+		ActiveConnections := new(Set);
+		NumberOfConcurrentConnections := 0;
+		MaximumNumberOfConcurrentConnections := 0;
+		// initialise the confidence levels 
+		self withParameters(0.95, 0.95);
+		self setBatchSize(100);
+		return self
+
+	/*
+	 * log the statistical results to file
+	 */
+	log() : CommunicationStatus 
+		|File: FileOut|
+		File := new(FileOut) destination(self identity + ".log") open;
+		File write("Interconnect Utilisation Results:\n\nMaximum Number of Concurrent Connections: " + MaximumNumberOfConcurrentConnections printString lf lf + "Statistics for Average Number of Concurrent Connections:\n" + self logStatistics);
+		File close;
+		return self
+
+	/* 
+	 * generate a textual representation
+	 */
+	printString : String
+		return "Number of Concurrent Connections: " + NumberOfConcurrentConnections printString lf lf + "Active Connections:\n" + 
+			ActiveConnections printString lf lf + "Achieved Maximum Number of Concurrent Connections: " + 
+			MaximumNumberOfConcurrentConnections printString lf lf + 
+			"Statistics for Average Number of Concurrent Connections:\n" + self printStatistics
+			

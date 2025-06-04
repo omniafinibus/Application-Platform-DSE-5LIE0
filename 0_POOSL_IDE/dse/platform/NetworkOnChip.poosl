@@ -1,0 +1,21 @@
+import "StorageUnit.poosl"
+import "CommunicationUnit.poosl"
+
+cluster class NetworkOnChip (BandwidthPerConnection: Real, ConnectionSetUpLatency: Real, MaxEventTimeToLog: Real, 
+	NetworkName: String, PowerPerActiveConnection: Real, PowerPerStoredByte: Real, AccuracyCheckInterval : Real)
+	
+ports 
+	Communications, 
+	Power
+
+instances
+	BufferMemory: StorageUnit(MaxEventTimeToLog := MaxEventTimeToLog, Name := "NoC", PowerPerByte := PowerPerStoredByte, 
+		Type := "Buffer", AccuracyCheckInterval := AccuracyCheckInterval)
+	RouterNetwork: CommunicationUnit(BandwidthPerConnection := BandwidthPerConnection, ConnectionSetUpLatency := ConnectionSetUpLatency, 
+		MaxEventTimeToLog := MaxEventTimeToLog, NodeName := NetworkName, PowerPerActiveConnection := PowerPerActiveConnection, 
+		AccuracyCheckInterval := AccuracyCheckInterval)
+
+channels
+	{BufferMemory.Access, RouterNetwork.Memory} 
+	{Communications, RouterNetwork.Communications} 
+	{Power, BufferMemory.Power, RouterNetwork.Power}

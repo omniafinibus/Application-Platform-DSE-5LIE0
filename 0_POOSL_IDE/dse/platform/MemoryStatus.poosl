@@ -1,0 +1,73 @@
+import "../../libraries/performance.poosl"
+
+/*
+ * data class for memory related statistics and logging
+ */
+data class MemoryStatus extends LongRunTimeAverage
+
+variables 
+	// current memory usage
+	Occupation: Integer,
+	// maximum memory usage
+	MaximumOccupation: Integer
+
+methods
+
+	/* 
+	 * allocate new memory
+	 */
+	allocate(NumberOfBytes: Integer, CurrentTime: Real) : MemoryStatus
+		// update Occupation
+		Occupation := Occupation + NumberOfBytes;
+		// track maximum occupation
+		if Occupation > MaximumOccupation then MaximumOccupation := Occupation fi;
+		// register the change to the underlying LongRunTimeAverage performance monitor 
+		self rewardBM(Occupation asReal, CurrentTime);
+		return self
+
+	/*
+	 * return the current occupation 
+	 */
+	currentOccupation() : Integer
+		return Occupation
+
+	/*
+	 * free memory
+	 */
+	free(NumberOfBytes: Integer, CurrentTime: Real) : MemoryStatus
+		// update Occupation
+		Occupation := Occupation - NumberOfBytes;
+		// register to performance monitor
+		self rewardBM(Occupation asReal, CurrentTime);
+		return self
+
+	/*
+	 * initialisation
+	 */
+	init : MemoryStatus
+		Occupation := 0;
+		MaximumOccupation := 0;
+		self withParameters(0.95, 0.95);
+		self setBatchSize(100);
+		return self
+
+	/* 
+	 * log results to file
+	 */
+	log() : PerformanceMonitor 
+		| File : FileOut |
+		// create file
+		File := new(FileOut) destination(self identity + ".log") open;
+		// write info to file
+		File write("Maximum Occupation: " + MaximumOccupation printString cr cr + 
+			"Statistics for Average Occupation:\n" + self logStatistics);
+		// close file
+		File close;
+		return self
+
+	/*
+	 * generate textual representation
+	 */
+	printString: String
+		return "Occupation: " + Occupation printString cr cr + "Maximum Occupation: " + 
+			MaximumOccupation printString cr cr + "Statistics for Average Occupation:\n" + self printStatistics

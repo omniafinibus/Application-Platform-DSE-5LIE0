@@ -1,0 +1,158 @@
+import "../../libraries/xml.poosl"
+import "../../common/TraceObserver.poosl"
+
+import "MemoryStatus.poosl"
+
+/*
+ * process modelling data storage
+ */
+process class StorageUnit(MaxEventTimeToLog: Real, Name: String, PowerPerByte: Real, Type: String, AccuracyCheckInterval : Real)
+
+ports 
+	Access, 
+	Power
+	
+messages 
+	Access?Allocate(Integer), 
+	Access?Free(Integer),
+	Access?Use(Boolean), 
+	Power!StartConsumption(Real), 
+	Power!StopConsumption(Real)
+	
+variables 
+	LogXMLDoc: XMLDocument, 
+	Logging: Boolean, 
+	Status: MemoryStatus, 
+	TraceElement: XMLElement, 
+	TraceObserver : Observer
+	
+init 
+	Initialise()()
+	
+methods
+
+	/* 
+	 * the event trace is limited to a small initial part of a simulation.
+	 * check if further logging is required
+	 */
+	CheckContinueLog()()
+		if currentTime > MaxEventTimeToLog then
+			Logging := false;
+			CloseLog()()
+		fi
+	
+	/*
+	 * close the logging
+	 * write the results to file
+	 */
+	CloseLog()() 
+		| LogFile: FileOut |
+		LogFile := new (FileOut) destination("MemoryTrace" + Name + ".xml") open;
+		LogFile write(LogXMLDoc xmlString());
+		LogFile close;
+		// tell the simulator that we are good.
+		TraceObserver complete()
+		
+		
+	/*
+	 * create an XML doc to be filled with a trace of the node 
+	 */
+	CreateLog()()
+		Logging := true;
+		TraceElement := new(XMLElement) init("trace");
+		TraceElement addAttribute("name", Name + " (" + Type + ")");
+		LogXMLDoc := new(XMLDocument) init setElement(TraceElement)
+
+	/*
+	 * handle accesses to the storage unit
+	 */		
+	HandleAccesses()()
+		| NumberOfBytes: Integer |
+		sel
+			// allocation message received
+			Access?Allocate(NumberOfBytes){
+				// update the status with the allocation memory and time stamp
+				Status allocate(NumberOfBytes, currentTime)};
+			// adjust power consumption accordingly
+			Power!StartConsumption(PowerPerByte * (NumberOfBytes asReal));
+			// log the claim for the trace
+			LogClaim(NumberOfBytes)()
+		or
+			// free message received
+   			Access?Free(NumberOfBytes){
+   				//update the status 
+   				Status free(NumberOfBytes, currentTime)};
+			// adjust power consumption accordingly
+   			Power!StopConsumption(PowerPerByte * (NumberOfBytes asReal));
+			// log the release event
+   			LogRelease(NumberOfBytes)()
+		les;
+		// start over
+		HandleAccesses()()
+		
+	/*
+	 * initialisation
+	 */
+	Initialise()() 
+		| InUse: Boolean |
+		// create observer object to finalise the trace log
+		TraceObserver := new(TraceObserver) identifyWith("StorageUnit_" + Name) register;
+		// check if we are actively used by the application
+		Access?Use(InUse);
+		// create the trace log
+		CreateLog()();
+		if InUse then
+			// if we are used, create the status object to track our state
+   			Status := new(MemoryStatus) init logTo("Memory" + Name);
+			// start the main activities
+   			par
+   				// handling storage accesses 
+   				HandleAccesses()() 
+   			and 
+   				// checking accuracy of the statistics
+   				CheckAccuracyStatus()() 
+   			rap
+   		else
+   			Complete()()
+   		fi
+
+	/*
+	 * complete trace log
+	 */   		
+	Complete()()
+		// close the log
+		CloseLog()()
+
+	/*
+	 * periodically check if the statistics are accurate
+	 */
+	CheckAccuracyStatus()()
+		delay AccuracyCheckInterval;
+		if Status accurate then
+			Complete()()
+		else
+			CheckAccuracyStatus()()								/* check again */
+		fi	
+		
+	/*
+	 * log a claim event
+	 */
+	LogClaim(Amount : Integer)() 
+		| claimEl: XMLElement |
+		if Logging then
+			claimEl := new(XMLElement) init("claim") addAttribute("amount", Amount printString) addAttribute("time", currentTime printString());
+			TraceElement addElement(claimEl);
+			CheckContinueLog()()
+		fi
+		
+	/*
+	 * log a release event
+	 */
+	LogRelease(Amount : Integer)() 
+		| releaseEl: XMLElement |
+		if Logging then
+			releaseEl := new(XMLElement) init("release") addAttribute("amount", Amount printString) addAttribute("time", currentTime printString());
+			TraceElement addElement(releaseEl);
+			CheckContinueLog()()
+		fi
+		

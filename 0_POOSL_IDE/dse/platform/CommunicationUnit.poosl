@@ -1,0 +1,217 @@
+import "../../libraries/xml.poosl"
+
+import "CommunicationStatus.poosl"
+
+/*
+ * model of the communication in a node.
+ */
+process class CommunicationUnit(BandwidthPerConnection: Real, ConnectionSetUpLatency: Real, MaxEventTimeToLog: Real, 
+	NodeName: String, PowerPerActiveConnection: Real, AccuracyCheckInterval : Real)
+
+ports 
+	Communications, 
+	Memory, 
+	Power
+	
+messages 
+	Communications?InitialiseTokens(String, Integer, Integer), 
+	Communications?ReleaseRoom(String, Integer, Integer),
+	Communications?ReserveRoom(String, Integer, String, Integer, Integer), 
+	Communications?Transfer(String, Integer, String, Integer),
+	Communications!TransferCompleted(String, Integer), 
+	Communications!TransferInitiated(String), 
+	Communications?Use(String),
+	Memory!Allocate(Integer), 
+	Memory!Free(Integer), 
+	Memory!Use(Boolean), 
+	Power!StartConsumption(Real), 
+	Power!StopConsumption(Real)
+	
+variables 
+	TraceLogXMLDoc: XMLDocument, 
+	Logging: Boolean, 
+	Status: CommunicationStatus, 
+	TraceElement: XMLElement
+	
+init 
+	Initialise()()
+	
+methods
+
+	/* 
+	 * the event trace is limited to a small initial part of a simulation.
+	 * check if further logging is required
+	 */
+	CheckContinueLog()()
+		// compare the current time to the MaxEventTimeToLog parameter
+		if currentTime > MaxEventTimeToLog then
+			Logging := false;
+			CloseLog()()
+		fi
+
+	/*
+	 * Close the logging
+	 * Write the results to file
+	 */
+	CloseLog()() 
+		| LogFile: FileOut |
+		LogFile := new (FileOut) destination("CommunicationTrace" + NodeName + ".xml") open;
+		LogFile write(TraceLogXMLDoc xmlString());
+		LogFile close()
+
+	/*
+	 * Create an XML doc to be filled with a trace of the node 
+	 */
+	CreateLog()()
+		Logging := true;
+		TraceElement := new(XMLElement) init("trace");
+		TraceElement addAttribute("type", "communication");
+		TraceElement addAttribute("name", NodeName);
+		TraceLogXMLDoc := new(XMLDocument) init setElement(TraceElement)
+
+	/*
+	 * get any initial tokens from the application channel for a short duration
+	 * after that assume the channel has no initial tokens
+	 * if there are initial tokens, take care of the corresponding memory allocation
+	 */
+	GetInitialTokens()()  
+		|MapTo: String, NumberOfTokens, TokenSize: Integer|
+		abort
+			while true do
+				Communications?InitialiseTokens(MapTo, NumberOfTokens, TokenSize | MapTo = NodeName);
+				// allocate the required memory
+				Memory!Allocate(NumberOfTokens * TokenSize)
+			od
+		with 
+			// abort listening for the message after a short time
+			delay(1.0e-12)
+	
+	/*
+	 * initialisation
+	 */
+	Initialise()() 
+		|MapTo : String, InUse: Boolean|
+		// check if there are any fifos using this communication unit
+		InUse := false;
+		// listen for a short duration for "Use" messages indicating an active mapping
+		abort while true do Communications?Use(MapTo | MapTo = NodeName){InUse := true} od with delay(1.0e-12);
+		// create the trace logging XML doc
+		CreateLog()();
+		// tell the memory it is being used
+		Memory!Use(InUse);
+		// further initialization depending on the Use status
+		if InUse then
+			// create a status data object to monitor our status
+			Status := new(CommunicationStatus) init logTo("Communication" + NodeName);
+			// check for initial tokens
+			GetInitialTokens()();
+			// start our main activities
+			par
+				// handle starting communication data transfers 
+				Transfer()() 
+			and 
+				// handle completions of communication data transfers
+				ReleaseBufferSpace()() 
+			and 
+				// periodically check our accuracy status
+				CheckAccuracyStatus()() 
+			rap
+		else
+			// nothing more to do. Close logging, then terminate
+			CloseLog()()
+		fi
+
+	/*
+	 * wrap up our statistical data collection
+	 */
+	Complete()()
+		// close the logging and write log data to file
+		CloseLog()();
+		// mark the observer complete
+		Status complete
+	
+
+	/*
+	 * log the completion of a transfer
+	 */
+	LogComplete(Chan: String)() 
+		|endEl: XMLElement|
+		if Logging then
+			endEl := new(XMLElement) init("end") addAttribute("channel", Chan) addAttribute("time", currentTime printString());
+			TraceElement addElement(endEl);
+			CheckContinueLog()()
+		fi
+		
+	/*
+	 * log the starting of a transfer
+	 */
+	LogStart(Chan: String, Iter: Integer)() 
+		|startEl: XMLElement|
+		if Logging then
+			startEl := new(XMLElement) init("start") addAttribute("channel", Chan) addAttribute("iteration", Iter printString) addAttribute("time", currentTime printString());
+			TraceElement addElement(startEl);
+			CheckContinueLog()()
+		fi
+		
+	/* 
+	 * handle the completion of transfers
+	 */
+	ReleaseBufferSpace()() 
+		|MapTo: String, NumberOfTokens, TokenSize: Integer|
+		// wait for a message from the application
+		Communications?ReleaseRoom(MapTo, NumberOfTokens, TokenSize | MapTo = NodeName);
+		// release the appropriate amount of memory
+		Memory!Free(NumberOfTokens * TokenSize);
+		// and start again
+		ReleaseBufferSpace()()
+		
+	/* 
+	 * handle new transfers 
+	 */
+	Transfer()() 
+		|Channel, Connection, MapTo: String, Iteration, NumberOfTokens, TokenSize, TransferID: Integer|
+		// wait for a message from the application
+		// only accept if the connection is not already active 
+		Communications?ReserveRoom(Channel, Iteration, MapTo, NumberOfTokens, TokenSize | (Status inactive(Channel)) & (MapTo = NodeName)){
+			// immediately ater activate the connection
+			Status activate(Channel, currentTime)};
+		// concurrently ...
+		par
+			// handle the transfer
+			// allocate the required memory
+			Memory!Allocate(NumberOfTokens * TokenSize);
+			// tell the application that the transfer has started
+			Communications!TransferInitiated(Channel);
+			// wait for some time modelling the time to setup the data transfer
+			delay ConnectionSetUpLatency;
+			// wait for the application to start the transfer
+			Communications?Transfer(Connection, Iteration, MapTo, TransferID | (Connection = Channel) & (MapTo = NodeName));
+			// log the starting of the transfer
+			LogStart(Channel, Iteration)();
+			// notify the battery of the extra power consumption
+			Power!StartConsumption(PowerPerActiveConnection);
+			// wait for a time to complete the transfer
+			delay (NumberOfTokens * TokenSize) asReal / BandwidthPerConnection;
+			// log the completion of the transfer
+			LogComplete(Channel)();
+			// tell the application about the completion of the transfer
+			Communications!TransferCompleted(Channel, TransferID){Status deactivate(Channel, currentTime)};
+			// notify the battery of the end of the extra power consumption
+			Power!StopConsumption(PowerPerActiveConnection)
+		and
+			// and start over again
+			Transfer()()
+		rap
+		
+	/*
+	 * periodically check the accuracy of the statistics 
+	 */
+	CheckAccuracyStatus()()
+		delay AccuracyCheckInterval;
+		if Status accurate not then
+			// check again
+			CheckAccuracyStatus()()
+		else
+			Complete()()
+		fi
+		

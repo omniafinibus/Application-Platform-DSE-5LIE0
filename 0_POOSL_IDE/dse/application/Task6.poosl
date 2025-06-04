@@ -1,0 +1,43 @@
+import "Task.poosl"
+
+process class Task6 extends Task
+
+ports 
+	In_F5_T2, 
+	Out_F10_T9
+	
+messages 
+	Control!MappedTo(String), In_F5_T2!InspectTokenAvailability(Integer), In_F5_T2!MappedTo(String), In_F5_T2!ReleaseRoom(),
+	In_F5_T2?TokensAvailable(), Out_F10_T9!MappedTo(String), Out_F10_T9?ReservationSuccessful(), Out_F10_T9!ReserveRoom(Integer, Integer),
+	Out_F10_T9!WriteTokens()
+
+variables
+
+init 
+	Initialise()()
+
+methods
+
+	CheckTokenAvailabilityForReads(Scenario: String)()
+		In_F5_T2!InspectTokenAvailability(1);
+		In_F5_T2?TokensAvailable
+
+	NotifyBuffersAboutMapping()()
+		par
+			In_F5_T2!MappedTo(MapTo)
+		and
+			Out_F10_T9!MappedTo(MapTo)
+		and
+			Control!MappedTo(MapTo)
+		rap
+
+	PerformWrites(Scenario: String)()
+		Out_F10_T9!WriteTokens
+
+	ReleaseSpaceForReads(Scenario: String)()
+		In_F5_T2!ReleaseRoom
+
+	ReserveSpaceForWrites(Scenario: String, Iteration: Integer)()
+		Out_F10_T9!ReserveRoom(1, Iteration);
+		Out_F10_T9?ReservationSuccessful
+		

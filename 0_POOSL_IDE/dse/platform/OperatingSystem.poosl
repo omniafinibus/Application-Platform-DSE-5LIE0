@@ -1,0 +1,230 @@
+import "SchedulerStatus.poosl"
+import "../../libraries/xml.poosl"
+import "../../common/TraceObserver.poosl"
+
+/* 
+ * model of the scheduling of tasks on the processing unit
+ * implements priority based and first-come first-served scheduling policies
+ */
+process class OperatingSystem(MaxEventTimeToLog: Real, NodeName: String, Policy: String)
+
+ports 
+	Processor, 
+	Task
+
+messages 
+	Processor?ContextSwitchComplete(), 
+	Processor!Execute(ScheduledTask), 
+	Processor!Preempt(),
+	Processor?Stopped(ScheduledTask), 
+	Processor?TypeOfProcessor(String), 
+	Processor!Use(Boolean),
+	Task?Execute(String, String, Object, Integer, String), 
+	Task!ExecutionCompleted(String), 
+	Task?Use(String)
+	
+variables 
+	LogXMLDoc: XMLDocument, 
+	Logging: Boolean, 
+	Status: SchedulerStatus, 
+	TraceElement: XMLElement, 
+	TraceObserver: Observer
+
+init 
+	Initialise()()
+
+methods
+
+
+	Complete()()
+		CloseLog()();
+		// register that we are done
+		TraceObserver complete()
+			
+	/* 
+	 * the event trace is limited to a small initial part of a simulation.
+	 * check if further logging is required
+	 */
+	CheckContinueLog()()
+		// compare the current time to the MaxEventTimeToLog parameter
+		if currentTime > MaxEventTimeToLog then
+			Logging := false;
+			Complete()()
+		fi
+
+
+	/*
+	 * Close the logging
+	 * Write the results to file
+	 */
+	CloseLog()() 
+		|LogFile: FileOut|
+		LogFile := new (FileOut) destination("ProcessorTrace" + NodeName + ".xml") open;
+		LogFile write(LogXMLDoc xmlString());
+		LogFile close()
+	
+	/*
+	 * Create an XML doc to be filled with a trace of the node 
+	 */
+	CreateLog(InUse: Boolean)() 
+		|Type: String|
+		Logging := true;
+		Processor?TypeOfProcessor(Type);
+		TraceElement := new(XMLElement) init("trace");
+		TraceElement addAttribute("type", "processor");
+		if InUse then
+			TraceElement addAttribute("name", Type + " (" + Policy + ")")
+		else
+			TraceElement addAttribute("name", "not used")
+		fi;
+		TraceElement addAttribute("name", Type + " (" + Policy + ")");
+		LogXMLDoc := new(XMLDocument) init setElement(TraceElement)
+	
+	/*
+	 * execute a task
+	 */
+	Execute(Task: ScheduledTask)()
+		// tell the processor to execute task
+		Processor!Execute(Task);
+		// log the starting of the task
+		LogStart(Task)();
+		// wait for the processor to confirm completion of a context switch
+		Processor?ContextSwitchComplete();
+		// log the context switch
+		LogContextSwitch(Task)()
+	
+	/*
+	 * Get the task mapping from the application
+	 */
+	GetMapping()(InUse: Boolean) 
+		| MapTo: String |
+		InUse := false;
+		abort 
+			// wait for messages from tasks mapped to this node 
+			while true do 
+				Task?Use(MapTo | MapTo = NodeName);
+				InUse := true
+			od
+		with 
+			// stop listening after a small amount of time 
+			delay 1.0e-12;
+		// notify the processor whether it is actually being used
+		Processor!Use(InUse)
+
+	/*
+	 * initialisation
+	 */
+	Initialise()() 
+		| InUse: Boolean |
+		// create an observer object 
+		TraceObserver := new(TraceObserver) register identifyWith(NodeName + "_OperatingSystem");
+		// get the mapping, returns boolean to indicate if it is used
+		GetMapping()(InUse);
+		// create the log
+		CreateLog(InUse)();
+		// if we are being used
+		if InUse then
+			// create a status object to manage our scheduling state
+			Status := new(SchedulerStatus) init(Policy);
+			// start out main activity
+			Schedule()()
+		fi;
+		Complete()()
+				
+	/*
+	 * log the event of a context switch
+	 */
+	LogContextSwitch(Task: ScheduledTask)() 
+		| csEl: XMLElement |
+		if Logging then
+			csEl := new(XMLElement) init("contextswitch") addAttribute("task", Task getName()) addAttribute("time", currentTime printString());
+			TraceElement addElement(csEl);
+			CheckContinueLog()()
+		fi
+	
+	/*
+	 * log the event of a preemption
+	 */
+	LogPreempt(Task: ScheduledTask)() 
+		| preeEl: XMLElement |
+		if Logging then
+			preeEl := new(XMLElement) init("preemption") addAttribute("task", Task getName()) addAttribute("time", currentTime printString());
+			TraceElement addElement(preeEl);
+			CheckContinueLog()()
+		fi
+	
+	/*
+	 * log the event of a task start
+	 */
+	LogStart(Task: ScheduledTask)() 
+		| startEl: XMLElement |
+		if Logging then
+			startEl := new(XMLElement) init("start") addAttribute("task", Task getName()) addAttribute("iteration", Task getIteration printString()) addAttribute("time", currentTime printString());
+			TraceElement addElement(startEl);
+			CheckContinueLog()()
+		fi
+
+	/*
+	 * log the event of a task end
+	 */
+	LogStop(Task: ScheduledTask)() 
+		| stopEl: XMLElement |
+		if Logging then
+			stopEl := new(XMLElement) init("stop") addAttribute("task", Task getName()) addAttribute("time", currentTime printString());
+			TraceElement addElement(stopEl);
+			CheckContinueLog()()
+		fi
+
+	/*
+	 * preempt a task
+	 */
+	Preempt()() 
+		| OldTask: ScheduledTask |
+		// tell the processor to preempt running task
+		Processor!Preempt;
+		// wait for the processor to confirm that the task has stopped executing
+		Processor?Stopped(OldTask){
+			// update the status of the preempted task 
+			Status updateTask(OldTask)};
+		// log the preemption
+		LogPreempt(OldTask)()
+
+	/*
+	 * the main task scheduling activity
+	 */
+	Schedule()() 
+		| Task, Scenario, MapToNode: String, Iteration, Priority, NumberOfWaitingTasks: Integer, NewTask, OldTask: ScheduledTask |
+		sel
+			// a new task to schedule arrives from the application
+			Task?Execute(Task, Scenario, Iteration, Priority, MapToNode | MapToNode = NodeName){
+				// register it and get a reference to it as a scheduled task in the scheduler
+				NewTask := Status registerTask(Task, Scenario, Iteration, Priority)};
+			// check if the new task is the next one to be scheduled
+			if Status nextTaskToSchedule == NewTask then
+				// tell the processor to start the new task immediately, or to first preempt a running task
+				sel
+					Execute(NewTask)()			/* No other Task is being executed */
+				or
+					Preempt()();				/* Preempt the running task first. */
+					// now the task can be executed
+					Execute(NewTask)()
+				les
+			fi
+		or
+			// the processor tells us that it has complete the current task
+			Processor?Stopped(OldTask){
+				// remove the task from the scheduler and learn how many tasks are still to be scheduled
+				NumberOfWaitingTasks := Status removeTask(OldTask)};
+			// log the completion of the task
+			LogStop(OldTask)();
+			// tell the application about the completion of the execution
+			Task!ExecutionCompleted(OldTask getName);
+			// if there are more tasks waiting
+			if NumberOfWaitingTasks > 0 then	
+				// Run the next available Task 
+				Execute(Status nextTaskToSchedule)()
+			fi
+		les;
+		// continue scheduling future tasks 
+		Schedule()()
+		

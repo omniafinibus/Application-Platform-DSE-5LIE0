@@ -1,0 +1,54 @@
+import "FIFOBuffer.poosl"
+import "ControlBufferMonitor.poosl"
+
+process class ControlBuffer() extends FIFOBuffer
+
+ports 
+
+messages 
+	Communication?TransferCompleted(String, Integer)
+	Communication!Transfer(String, Integer, String, Integer)
+	Communication!ReleaseRoom(String, Integer, Integer)
+	In?WriteTokens(String, Integer)
+	Out?InspectTokenAvailability
+	Out?ReleaseRoom
+	Out!TokenAvailable(String, Integer)
+
+variables
+
+init
+	Initialise()()
+
+methods
+
+	/*  
+	 * initialize the specialized monitor
+	 */
+	InitialiseSpecifics()()
+		Status := new(ControlBufferMonitor) init(Name, -1, TokenSize)
+
+
+	/*
+	 * handle incoming data on the input side
+	 */
+	HandleInput()() 
+		| Scenario: String, Iteration, NumberOfTokens: Integer, Connection: String, ID: Integer |
+		ReserveRoom()(NumberOfTokens);
+		In?WriteTokens(Scenario, Iteration){TransferID := TransferID + 1};
+		par
+			Communication!Transfer(Name, Iteration, MapTo, TransferID);
+			Communication?TransferCompleted(Connection, ID | (Connection = Name) & (ID = TransferID)){Status write(NumberOfTokens, Scenario, Iteration)}
+		and
+			HandleInput()()
+		rap
+		
+	/*
+	 * handle data on the output side
+	 */
+	HandleOutput()()
+		[Status available] Out?InspectTokenAvailability;
+		Out!TokenAvailable(Status inspectScenario, Status inspectIteration);
+		Out?ReleaseRoom;
+		Communication!ReleaseRoom(MapTo, 1, 1){Status remove()};
+		HandleOutput()()
+		

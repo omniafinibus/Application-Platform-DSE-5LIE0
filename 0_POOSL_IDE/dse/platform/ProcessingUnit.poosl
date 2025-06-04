@@ -1,0 +1,114 @@
+import "ProcessorStatus.poosl"
+
+/*
+ * process class that models a processor executing tasks, with voltage scaling possibilities
+ */
+process class ProcessingUnit(NodeName: String, Type: String, VoltageScaleFactor: Real, AccuracyCheckInterval : Real)
+
+ports 
+	Memory, 
+	OS, 
+	Power
+	
+messages 
+	Memory!Free(Integer),
+	Memory!Use(Boolean), 
+	OS?Execute(ScheduledTask), 
+	OS?Preempt()Memory!Allocate(Integer), 
+	OS?Use(Boolean)OS!Stopped(ScheduledTask), 
+	OS!ContextSwitchComplete(), 
+	OS!TypeOfProcessor(String),
+	Power!StartConsumption(Real), 
+	Power!StopConsumption(Real)
+	
+variables 
+	Status: ProcessorStatus
+
+init 
+	Initialise()()
+
+methods
+
+	/*
+	 * periodically check accuracy of the statistical data
+	 */
+	CheckAccuracyStatus()()
+		delay AccuracyCheckInterval;
+		if Status accurate not then
+			// not accurate yet, then continue
+			CheckAccuracyStatus()()		
+		else
+			// otherwise, log the results
+			Status log()
+		fi
+	
+	/*
+	 * execute a task on the processor 
+	 */
+	ExecuteTask()() 
+		| Task: ScheduledTask, StartTime: Real, Preempt: Boolean |
+		// wait for a task to execute from the operating system
+		OS?Execute(Task){
+			// immediately after, update the status accordingly
+			Status run(Task, currentTime)};
+		// tell the battery that we are now consuming power
+		Power!StartConsumption(Status getPowerConsumption);
+		// wait for the duration of context switching 
+		delay Status getContextSwitchingTime / VoltageScaleFactor;
+		// tell the OS context switch is complete
+		OS!ContextSwitchComplete();
+		// if the task is new, memory needs to be allocated
+		if Status notPreviouslyPreempted(Task) then Memory!Allocate(Status getMemoryUsage(Task)) fi;
+		// keep track when we started working on this task and whether is will be preempted
+		StartTime := currentTime; Preempt := false;
+		abort
+			// wait for the execution time of the task
+			delay Status getExecutionTime(Task) / VoltageScaleFactor
+		with
+			// but abort the execution on a preemption
+			OS?Preempt{
+				// remember that a preemption has occurred
+				Preempt := true; 
+				// update state accordingly with the amount of work performed on the task
+				Status update(Task, (currentTime - StartTime) * VoltageScaleFactor)
+				};
+		// inform the OS that the task execution has been stopped and update the status 
+		OS!Stopped(Task){Status idle(currentTime)};
+		// update the battery that the processor stopped executing
+		Power!StopConsumption(Status getPowerConsumption);
+		// If the task was completed, free the memory 
+		if Preempt not then Memory!Free(Status getMemoryUsage(Task)) fi;
+		// start over
+		ExecuteTask()()
+		
+	/*
+	 * initialisation
+	 */
+	Initialise()() 
+		| InUse: Boolean |
+		// let's see if we are actually used or not
+		OS?Use(InUse);
+		// tell the OS what processor type we are
+		OS!TypeOfProcessor(Type);
+		// tell the memory whether we are going to use it
+		Memory!Use(InUse);
+		// if we are being used ...
+		if InUse then
+			// create a status object
+   			Status := new(ProcessorStatus) init(Type, VoltageScaleFactor) logTo("Processor" + NodeName);
+   			// check for the allowed voltage scaling values
+   			if  (VoltageScaleFactor != 1.0 / 4.0) &(VoltageScaleFactor != 1.0 / 2.0)
+			   &(VoltageScaleFactor != 1.0 / 3.0) &(VoltageScaleFactor != 2.0 / 3.0)
+			   &(VoltageScaleFactor != 3.0 / 4.0) &(VoltageScaleFactor != 1.0 / 1.0) then
+				Status error("Invalid voltage scale factor")
+			fi ;
+			// start our main activities
+			par 
+				// executing tasks 
+				ExecuteTask()() 
+			and 
+					// checking accuracy of the statistics
+				CheckAccuracyStatus()() 
+			rap
+		fi
+		

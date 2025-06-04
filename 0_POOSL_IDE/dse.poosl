@@ -1,0 +1,86 @@
+import "dse/application/application.poosl"
+import "dse/platform/platform.poosl"
+
+/* System Specification */
+
+system
+instances
+	Application: Application(
+		// You are allowed to change these parameters
+		
+		// mapping of the tasks to processor nodes
+		// should be Strings, "Node1", "Node2", "Node3", "Node4", "Node5" or "Node6"
+		MapTask1To := "Node1", 
+		MapTask2To := "Node2", 
+		MapTask3To := "Node3", 
+		MapTask4To := "Node4", 
+		MapTask5To := "Node5", 
+		MapTask6To := "Node6", 
+		MapTask7To := "Node1", 
+		MapTask8To := "Node2", 
+		MapTask9To := "Node3", 
+		MapTask10To := "Node4", 
+		MapTask11To := "Node5", 
+
+		// priorities should be positive Integer numbers
+		PriorityTask1 := 1, 
+		PriorityTask2 := 2, 
+		PriorityTask3 := 3, 
+		PriorityTask4 := 4, 
+		PriorityTask5 := 5, 
+		PriorityTask6 := 6, 
+		PriorityTask7 := 7, 
+		PriorityTask8 := 8,
+		PriorityTask9 := 9,  
+		PriorityTask10 := 10,
+		PriorityTask11 := 11,
+		
+		// Do not change the following parameters!
+		AccuracyCheckInterval := 0.03, 
+		ThroughputConstraint := 500.0, 		
+		LatencyBound := 0.02,
+		GlobalTimeOut := 50.0
+	)
+	
+	MPSoC: Platform(
+		// You are allowed to change these parameters
+		
+		// Processor types, select one of "ARMv8", "Adreno" or "MIPS"
+		Node1ProcessorType := "ARMv8", 
+		Node2ProcessorType := "Adreno",  
+		Node3ProcessorType := "MIPS",  
+		Node4ProcessorType := "ARMv8",
+		Node5ProcessorType := "Adreno",
+		Node6ProcessorType := "MIPS",
+
+		// The voltage scaling factors for each of the node
+		// The result should be a Real valued number, do not write something like '2/3' !
+		VSF1 := 1.0/1.0,
+		VSF2 := 1.0/1.0,
+		VSF3 := 1.0/1.0,
+		VSF4 := 1.0/1.0,
+		VSF5 := 1.0/1.0,
+		VSF6 := 1.0/1.0,
+		
+		// The operating system scheduling policies. Must be either "PB" of "FCFS"
+		OSPolicy1 := "FCFS",
+		OSPolicy2 := "FCFS",
+		OSPolicy3 := "FCFS",
+		OSPolicy4 := "PB",
+		OSPolicy5 := "PB",
+		OSPolicy6 := "PB",
+
+		// Do not change the following parameters
+		NoC_BandwidthPerConnection := 10000000.0, 
+		NoC_ConnectionSetUpLatency := 0.00002, 
+		Node_InternalBandwidth := 200000000.0, 
+		Node_InternalConnectionSetUpLatency := 0.00001, 
+		PowerPerActiveConnection := 0.01, 
+		PowerPerStoredByte := 0.0000012, 
+		AccuracyCheckInterval := 0.03, 
+		MaxEventTimeToLog := 0.1
+	)
+	
+channels
+	{ Application.Buffers, MPSoC.CommunicationResources } 
+	{ Application.Tasks, MPSoC.ComputationResources }

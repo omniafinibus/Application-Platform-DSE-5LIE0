@@ -1,0 +1,139 @@
+import "DataBuffer.poosl"
+import "ControlBuffer.poosl"
+import "Task1_5_6.poosl"
+import "Task2.poosl"
+import "Task3.poosl"
+import "Task4.poosl"
+import "Task5_6.poosl"
+import "Task7.poosl"
+import "Task8.poosl"
+import "Task9.poosl"
+import "Task10.poosl"
+import "Task11.poosl"
+
+
+/*
+ * The application part of the Y-chart model
+ */
+cluster class Application(
+	// Task mappings
+	MapTask1To,	MapTask2To,	MapTask3To, MapTask4To, MapTask5_6To, MapTask7To, MapTask8To, MapTask9To, MapTask10To, MapTask11To: String, 
+	// task priorities
+	PriorityTask1, PriorityTask2, PriorityTask3, PriorityTask4, PriorityTask5_6, PriorityTask7, PriorityTask8, PriorityTask9, PriorityTask10, PriorityTask11: Integer, 
+	// the throughput constraint
+	ThroughputConstraint: Real,
+	// how far may the latency increase before we declare that the throughput is not met
+	LatencyBound: Real,
+	// the period for checking statistical accuracy 
+	AccuracyCheckInterval: Real,
+	// the global timeout to stop simulation in simulated time
+	GlobalTimeOut: Real)
+
+ports 
+	// ports to the platform part of the model
+	Buffers, Tasks
+
+instances
+	// the data channels
+	F1:  DataBuffer(Name := "F1", NumberOfInitialTokens := 0, TokenSize := 2048)
+	F10: DataBuffer(Name := "F10", NumberOfInitialTokens := 0, TokenSize := 2048)
+	F11: DataBuffer(Name := "F11", NumberOfInitialTokens := 0, TokenSize := 1024)
+	F12: DataBuffer(Name := "F12", NumberOfInitialTokens := 0, TokenSize := 1024)
+	F13: DataBuffer(Name := "F13", NumberOfInitialTokens := 0, TokenSize := 1024)
+	F14: DataBuffer(Name := "F14", NumberOfInitialTokens := 0, TokenSize := 4096)
+	F15: DataBuffer(Name := "F15", NumberOfInitialTokens := 0, TokenSize := 2048)
+	// Note the initial tokens on this one!
+	F16: DataBuffer(Name := "F16", NumberOfInitialTokens := 3, TokenSize := 1)
+	F2:  DataBuffer(Name := "F2", NumberOfInitialTokens := 0, TokenSize := 2048)
+	F3:  DataBuffer(Name := "F3", NumberOfInitialTokens := 0, TokenSize := 4096)
+	F4:  DataBuffer(Name := "F4", NumberOfInitialTokens := 0, TokenSize := 2048)
+	F5:  DataBuffer(Name := "F5", NumberOfInitialTokens := 0, TokenSize := 1024)
+	F6:  DataBuffer(Name := "F6", NumberOfInitialTokens := 0, TokenSize := 2048)
+	F7:  DataBuffer(Name := "F7", NumberOfInitialTokens := 0, TokenSize := 1024)
+	F8:  DataBuffer(Name := "F8", NumberOfInitialTokens := 0, TokenSize := 4096)
+	F9:  DataBuffer(Name := "F9", NumberOfInitialTokens := 0, TokenSize := 2048)
+	
+	// scenario channels
+	G1: ControlBuffer(Name := "G1", TokenSize := 1)
+	G2: ControlBuffer(Name := "G2", TokenSize := 1)
+	G3: ControlBuffer(Name := "G3", TokenSize := 1)
+	G4: ControlBuffer(Name := "G4", TokenSize := 1)
+	G6: ControlBuffer(Name := "G6", TokenSize := 1)
+	G7: ControlBuffer(Name := "G7", TokenSize := 1)
+	G8: ControlBuffer(Name := "G8", TokenSize := 1)
+	G9: ControlBuffer(Name := "G9", TokenSize := 1)
+	G10: ControlBuffer(Name := "G10", TokenSize := 1)
+	
+	// The tasks
+	Task1: Task1(MapTo := MapTask1To, Name := "Task1", Priority := PriorityTask1, ThroughputConstraint := ThroughputConstraint)
+	Task2: Task2(MapTo := MapTask2To, Name := "Task2", Priority := PriorityTask2)
+	Task3: Task3(MapTo := MapTask3To, Name := "Task3", Priority := PriorityTask3)
+	Task4: Task4(MapTo := MapTask4To, Name := "Task4", Priority := PriorityTask4)
+	Task5_6: Task5_6(MapTo := MapTask5_6To, Name := "Task5_6", Priority := PriorityTask5_6)
+	Task7: Task7(MapTo := MapTask7To, Name := "Task7", Priority := PriorityTask7)
+	Task8: Task8(MapTo := MapTask8To, Name := "Task8", Priority := PriorityTask8)
+	Task9: Task9(MapTo := MapTask9To, Name := "Task9", Priority := PriorityTask9)
+	Task10: Task10(MapTo := MapTask10To, Name := "Task10", Priority := PriorityTask10)
+	// Task 11 has some special parameters
+	Task11: Task11(MapTo := MapTask11To, Name := "Task11", Priority := PriorityTask11, 
+		ThroughputConstraint := ThroughputConstraint, LatencyBound := LatencyBound,
+		AccuracyCheckInterval := AccuracyCheckInterval, GlobalTimeOut := GlobalTimeOut)
+
+channels
+
+	{Buffers, F1.Communication, F10.Communication, F11.Communication, F12.Communication, F13.Communication, F14.Communication,
+		F15.Communication, F16.Communication, F2.Communication, F3.Communication, 
+		F4.Communication, F5.Communication, F6.Communication, F7.Communication, F8.Communication, F9.Communication, G1.Communication, 
+		G2.Communication, G3.Communication, G4.Communication, G6.Communication, G7.Communication, G8.Communication
+		, G9.Communication, G10.Communication} 
+	{F1.Out,Task2.In_F1_T1}
+	{F2.Out,Task3.In_F2_T1}
+	{F3.Out,Task4.In_F3_T1}
+	{F4.Out,Task5_6.In1_F4_T2}
+	{F5.Out,Task5_6.In2_F5_T2}
+	{F6.Out,Task7.In_F6_T3}
+	{F7.Out,Task8.In1_F7_T3}
+	{F8.Out,Task8.In2_F8_T4}
+	{F9.Out,Task9.In1_F9_T5}
+	{F10.Out,Task9.In2_F10_T6}
+	{F11.Out,Task9.In3_F11_T7}
+	{F12.Out,Task10.In1_F12_T7}
+	{F13.Out,Task10.In2_F13_T8}
+	{F14.Out,Task11.In1_F14_T9}
+	{F15.Out,Task11.In2_F15_T10}
+	{F16.Out,Task1.In_F16_T11}
+	{G1.Out,Task2.Control}
+	{G2.Out,Task3.Control}
+	{G3.Out,Task4.Control}
+	{G4.Out,Task5_6.Control}
+	{G6.Out,Task7.Control}
+	{G7.Out,Task8.Control}
+	{G8.Out,Task9.Control}
+	{G9.Out,Task10.Control}
+	{G10.Out,Task11.Control}
+	{F1.In,Task1.D_F1_T2}
+	{F2.In,Task1.D_F2_T3}
+	{F3.In,Task1.D_F3_T4}
+	{F4.In,Task2.Out1_F4_T5}
+	{F5.In,Task2.Out2_F5_T6}
+	{F6.In,Task3.Out1_F6_T7}
+	{F7.In,Task3.Out2_F7_T8}
+	{F8.In,Task4.Out_F8_T8}
+	{F9.In,Task5_6.Out1_F9_T9}
+	{F10.In,Task5_6.Out2_F10_T9}
+	{F11.In,Task7.Out1_F11_T9}
+	{F12.In,Task7.Out2_F12_T10}
+	{F13.In,Task8.Out_F13_T10}
+	{F14.In,Task9.Out_F14_T11}
+	{F15.In,Task10.Out_F15_T11}
+	{F16.In,Task11.Out_F16_T1}
+	{G1.In,Task1.C_G1_T2}
+	{G2.In,Task1.C_G2_T3}
+	{G3.In,Task1.C_G3_T4}
+	{G4.In,Task1.C_G4_T5}
+	{G6.In,Task1.C_G6_T7}
+	{G7.In,Task1.C_G7_T8}
+	{G8.In,Task1.C_G8_T9}
+	{G9.In,Task1.C_G9_T10}
+	{G10.In,Task1.C_G10_T11}
+	{Tasks, Task1.Computation, Task2.Computation, Task3.Computation, Task4.Computation, Task5_6.Computation, Task7.Computation, Task8.Computation, Task9.Computation, Task10.Computation, Task11.Computation}

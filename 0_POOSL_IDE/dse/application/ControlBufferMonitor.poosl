@@ -1,0 +1,72 @@
+import "../../libraries/performance.poosl"
+import "FIFOBufferMonitor.poosl"
+
+data class ControlBufferMonitor extends FIFOBufferMonitor
+
+variables 
+	Buffer: Queue
+
+methods
+
+	/*
+	 * initialize the control buffer monitor
+	 * N: 	name
+	 * BS: 	buffer size, <1 means unbounded buffer
+	 * TS:	token size
+	 */
+	init(N: String, BS: Integer, TS: Integer) : ControlBufferMonitor
+		self ^init(N, BS, TS);
+		Buffer := new(Queue);
+		return self
+
+	/*
+	 * check if sufficient tokens are available for a read
+	 * for a control FIFO 1 token is enough
+	 */
+	available : Boolean
+		return AvailableTokens >= 1
+
+	/*
+	 * inspect the token in the front of the queue 
+	 */
+//	inspect : Integer
+//		return Buffer inspect
+
+	/*
+	 * inspect the iteration number of iterations 
+	 */
+	inspectIteration : Integer
+		// the elements in the buffer are arrays with scenario and iteration number
+		// the iteration number is piggy-backed only for trace generation 
+		return Buffer inspect at(2)
+
+	/*
+	 * inspect the scenario
+	 */
+	inspectScenario : String
+		// the elements in the buffer are arrays with scenario and iteration number
+		// the iteration number is piggy-backed only for trace generation 
+		return Buffer inspect at(1)
+
+	/*
+	 * remove one token from the buffer
+	 */
+	remove() : String 
+		AvailableTokens := AvailableTokens - 1;
+		return Buffer remove
+
+
+	/*
+	 * write NumberOfTokens tokens into the buffer, each valued with scenario Scenario and iteration number Iteration
+	 */
+	write(NumberOfTokens: Integer, Scenario: String, Iteration: Integer) : ControlBufferMonitor 
+		| Counter: Integer |
+		self ^write(NumberOfTokens);
+		Counter := NumberOfTokens;
+		while (Counter > 0) do
+			Buffer add(new(Array) resize(2) putAt(1, Scenario) putAt(2, Iteration));
+			Counter := Counter - 1
+		od;
+		return self
+
+				

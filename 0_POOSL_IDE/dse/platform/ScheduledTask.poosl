@@ -1,0 +1,71 @@
+/*
+ * represents a task in a scheduler
+ * keeps track of the task graph iteration for trace logging purposes
+ */
+data class ScheduledTask extends Object
+
+variables 
+	Iteration: Integer, 
+	Name: String, 
+	Priority: Integer, 
+	RemainingExecutionTime: Real, 
+	Scenario: String
+	
+methods
+
+	/*
+	 * returns the iteration number of the task 
+	 */
+	getIteration : Integer
+		return Iteration
+
+	/*
+	 * return the task name
+	 */
+	getName : String
+		return Name
+
+	/*
+	 * return the task priority
+	 */
+	getPriority : Integer
+		return Priority
+
+	/*
+	 * return the remaining execution (if any, nil otherwise)
+	 */
+	getRemainingExecutionTime : Real
+		return RemainingExecutionTime
+
+	/*
+	 * return the scenario of the task
+	 */
+	getScenario : String
+		return Scenario
+
+	/*
+	 * initialisation
+	 * N: Task Name
+	 * S: Scenario
+	 * I: Iteration
+	 * P: Priority
+	 */
+	init(N, S: String, I, P: Integer) : ScheduledTask
+		Name := N;
+		Scenario := S;
+		Iteration := I;
+		Priority := P;
+		return self
+
+	/*
+	 * create a textual representation
+	 */
+	printString : String
+		return "Task " + Name printString + " in Scenario " + Scenario printString + " with Priority " + Priority printString
+
+	/*
+	 * set the remaining execution time
+	 */
+	setRemainingExecutionTime(T: Real) : ScheduledTask
+		RemainingExecutionTime := T;
+		return self

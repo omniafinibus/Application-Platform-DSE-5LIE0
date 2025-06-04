@@ -1,0 +1,26 @@
+data class TraceObserver extends Observer
+variables
+	State: String
+methods
+
+
+	register: TraceObserver
+		State := "registered";
+		return self ^register
+	
+
+	deregister: TraceObserver
+		State := "unregistered";
+		return self ^deregister
+	
+
+	complete: Observer
+		State := "completed";
+		return self ^complete
+
+	state: String
+		if State == nil then State := "unregistered" fi;
+		return State
+
+	printString(): String
+		return "TraceObserver (" + self identity + ") in state: " + (self state)

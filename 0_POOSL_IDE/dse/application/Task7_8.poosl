@@ -1,0 +1,110 @@
+import "Task.poosl"
+
+process class Task7_8 extends Task
+
+ports 
+	In1_F6_T3, 
+	In2_F7_T3, 
+	In3_F8_T4, 
+	Out1_F11_T9,
+	Out2_F12_T10,
+	Out3_F13_T10
+	
+messages 
+	Control!MappedTo(String), 
+	In1_F6_T3!InspectTokenAvailability(Integer), 
+	In1_F6_T3!MappedTo(String), 
+	In1_F6_T3!ReleaseRoom(),
+	In1_F6_T3?TokensAvailable(), 
+
+	In2_F7_T3!InspectTokenAvailability(Integer), 
+	In2_F7_T3!MappedTo(String), 
+	In2_F7_T3!ReleaseRoom(),
+	In2_F7_T3?TokensAvailable(), 
+
+	In3_F8_T4!InspectTokenAvailability(Integer), 
+	In3_F8_T4!MappedTo(String), 
+	In3_F8_T4!ReleaseRoom(),
+	In3_F8_T4?TokensAvailable(), 
+	
+	Out1_F11_T9!MappedTo(String), 
+	Out1_F11_T9?ReservationSuccessful(), 
+	Out1_F11_T9!ReserveRoom(Integer, Integer),
+	Out1_F11_T9!WriteTokens(), 
+
+	Out2_F12_T10!MappedTo(String), 
+	Out2_F12_T10?ReservationSuccessful(), 
+	Out2_F12_T10!ReserveRoom(Integer, Integer),
+	Out2_F12_T10!WriteTokens(), 
+
+	Out3_F13_T10!MappedTo(String), 
+	Out3_F13_T10?ReservationSuccessful(), 
+	Out3_F13_T10!ReserveRoom(Integer, Integer),
+	Out3_F13_T10!WriteTokens()
+
+variables
+
+init 
+	Initialise()()
+
+methods
+
+	CheckTokenAvailabilityForReads(Scenario: String)()
+		In1_F6_T3!InspectTokenAvailability(1);
+		In1_F6_T3?TokensAvailable;
+
+		if Scenario = "S2" then
+			In2_F7_T3!InspectTokenAvailability(2);
+			In2_F7_T3?TokensAvailable;
+			In3_F8_T4!InspectTokenAvailability(1);
+			In3_F8_T4?TokensAvailable
+		else
+			In2_F7_T3!InspectTokenAvailability(1);
+			In2_F7_T3?TokensAvailable
+		fi
+
+	NotifyBuffersAboutMapping()()
+		par
+			In1_F6_T3!MappedTo(MapTo)
+		and
+			In2_F7_T3!MappedTo(MapTo)
+		and
+			In3_F8_T4!MappedTo(MapTo)
+		and
+			Out1_F11_T9!MappedTo(MapTo)
+		and
+			Out2_F12_T10!MappedTo(MapTo)
+		and
+			Out3_F13_T10!MappedTo(MapTo)
+		and
+			Control!MappedTo(MapTo)
+		rap
+
+	PerformWrites()()
+		Out1_F11_T9!WriteTokens;
+		Out2_F12_T10!WriteTokens;
+		Out3_F13_T10!WriteTokens
+
+	ReleaseSpaceForReads(Scenario: String)()
+		In1_F6_T3!ReleaseRoom;
+
+		if Scenario = "S2" then
+			In3_F8_T4!ReleaseRoom
+		fi;
+			In2_F7_T3!ReleaseRoom
+
+	ReserveSpaceForWrites(Scenario: String, Iteration: Integer)()
+
+		Out2_F12_T10!ReserveRoom(1, Iteration);
+		Out2_F12_T10?ReservationSuccessful;
+
+		Out3_F13_T10!ReserveRoom(1, Iteration);
+		Out3_F13_T10?ReservationSuccessful;
+		
+		if Scenario = "S1" then
+			Out1_F11_T9!ReserveRoom(2, Iteration);
+			Out1_F11_T9?ReservationSuccessful
+		else
+			Out1_F11_T9!ReserveRoom(1, Iteration);
+			Out1_F11_T9?ReservationSuccessful
+		fi

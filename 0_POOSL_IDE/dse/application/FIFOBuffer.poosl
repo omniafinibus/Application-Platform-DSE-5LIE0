@@ -1,0 +1,94 @@
+import "FIFOBufferMonitor.poosl"
+
+/* FIFOBuffer is a common super class of DataBuffer and ControlBuffer, factoring out common behavior.
+ * It has no instances.
+ */
+process class FIFOBuffer(Name: String, TokenSize: Integer)
+
+ports 
+	Communication, In, Out
+
+messages
+	Communication!ReserveRoom(String, Integer, String, Integer, Integer),
+	Communication!Use(String)Communication?TransferInitiated(String), 
+	In!ReservationSuccessful()In?MappedTo(String), 
+	In?ReserveRoom(Integer, Integer), 
+	Out?MappedTo(String)
+
+variables
+	MapTo: String, 
+	// status of the performance monitor 
+	Status: FIFOBufferMonitor, 
+	// counter for the transfers on this buffer
+	TransferID: Integer
+	
+
+init 
+	Initialise()()
+
+methods
+
+	/*  
+	 * initialize the buffer and then start
+	 */
+	Initialise()()
+		TransferID := 0;
+		DetermineMapping()();
+		NotifyPlatformAboutMapping()();
+		InitialiseSpecifics()();
+		par 
+			HandleInput()() 
+		and 
+			HandleOutput()() 
+		rap
+
+	/*
+	 * method should be overriden in subclasses and can be used for further specialized initialisation. 
+	 */
+	InitialiseSpecifics()()
+		nil error("Override method InitialiseSpecifics in subclasses.")
+		
+	/*
+	 * Determine the resource mapping based on the mapping of the tasks using the buffer. 
+	 * It uses the NoC when the tasks are mapped to different resources
+	 */
+	DetermineMapping()() 
+		| InputTaskMapping, OutputTaskMapping: String | 
+		// get mappings from tasks
+		In?MappedTo(InputTaskMapping);
+		Out?MappedTo(OutputTaskMapping);
+		// determine our own mapping
+		if InputTaskMapping = OutputTaskMapping then MapTo := InputTaskMapping else MapTo := "NoC" fi
+	
+
+	/*
+	 * Allow writer to reserve room for the data
+	 * Returns the number of tokens reserved
+	 */
+	 ReserveRoom()(NumberOfTokens: Integer)
+	 	|Iteration: Integer, Connection: String|
+	 	In?ReserveRoom(NumberOfTokens, Iteration | Status room(NumberOfTokens));
+		Communication!ReserveRoom(Name, Iteration, MapTo, NumberOfTokens, TokenSize);
+		Communication?TransferInitiated(Connection | Connection = Name){Status reserve(NumberOfTokens)};
+		In!ReservationSuccessful
+	 
+	/*
+	 * handle incoming data on the input side
+	 * implement in subclasses factor out ReserveRoom()()
+	 */
+	HandleInput()()
+		nil error("Override in subclasses") 
+
+	/*
+	 * handle data on the output side
+	 * implement in subclasses 
+	 */
+	HandleOutput()() 
+		nil error("Override in subclasses") 
+	
+	/*
+	 * communicate the mapping to the platform
+	 */
+	NotifyPlatformAboutMapping()()
+		Communication!Use(MapTo)
+		

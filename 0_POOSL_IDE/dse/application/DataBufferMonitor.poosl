@@ -1,0 +1,37 @@
+import "../../libraries/performance.poosl"
+import "FIFOBufferMonitor.poosl"
+
+data class DataBufferMonitor extends FIFOBufferMonitor
+
+variables 
+	
+methods
+
+	/*
+	 * initialize the data buffer monitor
+	 * N: 	name
+	 * BS: 	buffer size, <1 means unbounded buffer
+	 * IT:	number of initial tokens
+	 * TS:	token size
+	 */
+	init(N: String, BS, IT, TS: Integer) : DataBufferMonitor
+		self ^init(N, BS, TS);
+		// reserve and then write the initial tokens
+		self reserve(IT); 
+		self write(IT);
+		return self
+
+	/*
+	 * check if there are NumerOfTokens available in the buffer
+	 */
+	available(NumberOfTokens: Integer) : Boolean
+		return AvailableTokens >= NumberOfTokens
+
+	/*
+	 * remove NumberOfTokens tokens from the buffer
+	 */
+	remove(NumberOfTokens: Integer) : DataBufferMonitor 
+		AvailableTokens := AvailableTokens - NumberOfTokens;
+		return self
+
+

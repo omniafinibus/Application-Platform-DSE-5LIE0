@@ -1,0 +1,50 @@
+import "SET_DIR/0_POOSL_IDE/dse/application/{params[application]}.poosl"
+import "SET_DIR/0_POOSL_IDE/dse/platform/platform{params[numOfNodes]}.poosl"
+
+/* System Specification */
+
+system
+instances
+	Application: Application(
+		// You are allowed to change these parameters
+		
+		// mapping of the tasks to processor nodes
+		// should be Strings, "Node1", "Node2", "Node3", "Node4", "Node5" or "Node6"
+{params[mapping]}
+
+		// priorities should be positive Integer numbers
+{params[priorityAssignment]}
+		
+		// Do not change the following parameters!
+		AccuracyCheckInterval := 0.03, 
+		ThroughputConstraint := 500.0, 		
+		LatencyBound := 0.02,
+		GlobalTimeOut := 50.0
+	)
+	
+	MPSoC: Platform(
+		// You are allowed to change these parameters
+		
+		// Processor types, select one of "ARMv8", "Adreno" or "MIPS"
+{params[processorAssignment]}
+
+		// The voltage scaling factors for each of the node
+		// The result should be a Real valued number, do not write something like '2/3' !
+{params[voltageScaling]}
+
+		// The operating system scheduling policies. Must be either "PB" of "FCFS"
+{params[scheduleAssignment]}
+
+		// Do not change the following parameters
+		NoC_BandwidthPerConnection := 10000000.0, 
+		NoC_ConnectionSetUpLatency := 0.00002, 
+		Node_InternalBandwidth := 200000000.0, 
+		Node_InternalConnectionSetUpLatency := 0.00001, 
+		PowerPerActiveConnection := 0.01, 
+		PowerPerStoredByte := 0.0000012, 
+		AccuracyCheckInterval := 0.03, 
+		MaxEventTimeToLog := {params[simTime]}
+	)
+	
+channels
+{params[channels]}

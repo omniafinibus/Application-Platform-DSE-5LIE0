@@ -1,0 +1,98 @@
+
+data class XMLList extends Array
+variables Capacity: Integer, Count: Integer
+methods
+	add(o: Object) : XMLList
+		if Count = Capacity then self grow fi;
+		Count := Count + 1;
+		self putAt(Count, o);
+		return self
+	count : Integer
+		return Count
+	grow : XMLList
+		Capacity := 2 * Capacity;
+		self resize(Capacity);
+		return self
+	init(cap: Integer) : XMLList
+		Count := 0;
+		Capacity := cap;
+		self resize(Capacity);
+		return self
+
+
+data class XMLText extends Object
+variables Text: String
+methods
+	init(S: String) : XMLText
+		Text := S;
+		return self
+	printString : String
+		return "XMLText with: " + Text printString
+	xmlString : String
+		return Text
+
+
+data class XMLElement extends Object
+variables Attributes: Map, Children: XMLList, Name: String
+methods
+	addAttribute(N: String, V: String): XMLElement
+		Attributes putAt(N, V);
+		return self
+	addElement(E: XMLElement): XMLElement
+		Children add(E);
+		return self
+	addText(T: XMLText): XMLElement
+		Children add(T);
+		return self
+	getAttribute(N: String): String
+		return Attributes at(N)
+	getAttributes : Map
+		return Attributes
+	indentation(Level: Integer) : String |Result: String, i: Integer|
+		Result := ""; i := 0;
+		while i < Level do
+			Result concat("  ");
+			i := i +1
+		od;
+ 		return Result
+	init(N: String) : XMLElement
+		Name := N;
+		Attributes := new(Map);
+		Children := new(XMLList) init(10);
+		return self
+	printString : String
+		return self xmlString(0)
+	xmlString(Level: Integer) : String
+ 		return self indentation(Level) + "<" + Name + " " + self xmlStringAttributes + ">\n"  + self xmlStringChildren(Level + 1) + self indentation(Level) + "</" + Name + ">"
+	xmlStringAttributes : String |Result: String, Atts: Set, Att: String, i: Iterator, Count: Integer|
+		Result := ""; Atts := Attributes keys;
+		i := Atts iterator; Count := 1;
+		while !(i isDone) do
+			if Count > 1 then Result concat(" ") fi;
+			Att := i element;
+			Result concat(Att) concat("='") concat(Attributes at(Att)) concat("'");
+			Count := Count + 1; i advance
+		od;
+		return Result
+	xmlStringChildren(Level: Integer) : String |Result: String, Child: Object, i: Integer|
+		Result := ""; i := 1;
+		while i <= Children count do
+			Child := Children at(i);
+			Result concat(Child xmlString(Level)) cr;
+			i := i + 1
+		od;
+		return Result
+
+
+data class XMLDocument extends Object
+variables Element: XMLElement
+methods
+	init : XMLDocument
+		return self
+	printString: String
+		return self xmlString
+	setElement(E: XMLElement): XMLDocument
+		Element := E;
+		return self
+	xmlString: String
+		return "<?xml version='1.0' encoding='ISO-8859-1'?>\n" concat(Element xmlString(0))

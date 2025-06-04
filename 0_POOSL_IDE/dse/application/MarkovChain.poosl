@@ -1,0 +1,105 @@
+import "../../libraries/distributions.poosl"
+
+/*
+ * Markov chain
+ */
+data class MarkovChain extends Object
+
+variables 
+	CurrentState: String, 
+	NumberOfStates: Integer, 
+	Random: Uniform, 
+	StateSpace: Array, 
+	Transitions: Array
+
+methods
+
+	/*
+	 * add a state to the Markov chain, named State
+	 */
+	addState(State: String) : MarkovChain
+		NumberOfStates := NumberOfStates + 1;
+		StateSpace resize(NumberOfStates); 
+		StateSpace putAt(NumberOfStates, State);
+		Transitions resize(NumberOfStates); 
+		Transitions putAt(NumberOfStates, new(Array));
+		return self
+
+	/*
+	 * add a transition to the Markov chain from state State to state NextState
+	 * a state transition will be determined by comparing a uniform random sample between 0.0 and 1.0 to LowerBound
+	 * and UpperBound. The first transition where the sample is between the bounds will be taken.
+	 */
+	addTransition(State: String, NextState: String, LowerBound: Real, UpperBound: Real) : MarkovChain 
+		|i, StateNumber: Integer, T, A: Array|
+		// find the state
+		StateNumber := 0;
+		i := 1;
+		while i <= StateSpace size do
+			if StateSpace at(i) = State then StateNumber := i fi;
+			i := i + 1
+		od;
+		if StateNumber>0 then
+			T := Transitions at(StateNumber);
+			A := new(Array) resize(3); 
+			A putAt(1, NextState) putAt(2, LowerBound) putAt(3, UpperBound);
+			T resize(T size + 1); 
+			T putAt(T size, A)
+		fi;
+		return self
+
+	/*
+	 * move Markov chain to next epoch and return the Scenario
+	 */
+	getNextScenario : String 
+		|NextState: String, i, StateNumber: Integer, T: Array, Sample: Real|
+		// find the state number of the current state
+		i := 1;
+		while i <= StateSpace size do
+			if StateSpace at(i) = CurrentState then StateNumber := i fi;
+			i := i + 1
+		od;
+		// get the transitions
+		T := Transitions at(StateNumber);
+		// take a random sample
+		Sample := Random sample;
+		// find the corresponding transition
+		i := 1;
+		while i <= T size do
+			if ((Sample > T at(i) at(2)) & (Sample <= T at(i) at(3))) then NextState := T at(i) at(1) fi;
+			i := i + 1
+		od;
+		// update the state
+		CurrentState := NextState;
+		return NextState
+
+	/*
+	 * check if the state State exists
+	 */
+	hasState(State: String) : Boolean 
+		|Result: Boolean, i: Integer|
+		i := 1;
+		Result := false;
+		while i <= NumberOfStates do
+			if StateSpace at(i) = State then Result := true fi;
+			i := i + 1 
+		od;
+		return Result
+
+	/*
+	 * initialise the Markov chain with no states and no transitions
+	 */
+	init : MarkovChain
+		NumberOfStates := 0;
+		StateSpace := new(Array);
+		Transitions := new(Array);
+		Random := new(Uniform) withParameters(0.0, 1.0);
+		return  self
+
+	/*
+	 * set the initial state
+	 */
+	setInitialState(State: String) : MarkovChain
+		CurrentState := State;
+		return self
+		

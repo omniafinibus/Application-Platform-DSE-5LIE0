@@ -1,0 +1,72 @@
+import "FIFOBuffer.poosl"
+import "DataBufferMonitor.poosl"
+
+/*
+ * A FIFO buffer carrying data
+ */
+process class DataBuffer(NumberOfInitialTokens: Integer) extends FIFOBuffer
+
+ports 
+
+messages 
+	Communication!InitialiseTokens(String, Integer, Integer), 
+	Communication!Transfer(String, Integer, String, Integer)
+	Communication!ReleaseRoom(String, Integer, Integer)
+	Communication?TransferCompleted(String, Integer)
+	In?WriteTokens(), 
+	Out?InspectTokenAvailability(Integer),
+	Out!TokensAvailable()
+	Out?ReleaseRoom
+	
+variables
+
+init
+	Initialise()()
+
+methods
+
+	/*
+	 * Initialization
+	 */
+	InitialiseSpecifics()()
+		// create a status monitor
+		Status := new(DataBufferMonitor) init(Name, -1, NumberOfInitialTokens, TokenSize);
+		// when there initial tokens, initialize the platform accordingly
+		if NumberOfInitialTokens > 0 then Communication!InitialiseTokens(MapTo, NumberOfInitialTokens, TokenSize) fi
+		
+	/*
+	 * handle the input side
+	 */
+	HandleInput()() 
+		|NumberOfTokens, ID, Iteration: Integer, Connection: String|
+		// Generic behavior, implemented in the FIFOBuffer class, to have the Task reserve room 
+		ReserveRoom()(NumberOfTokens);
+		// wait for task to complete writing the tokens, and update the transfer counter 
+		In?WriteTokens {TransferID := TransferID + 1};
+		// concurrently ....
+		par
+			// complete the transfer through the platform
+			Communication!Transfer(Name, Iteration, MapTo, TransferID);
+			Communication?TransferCompleted(Connection, ID | (Connection = Name) & (ID = TransferID)){
+				Status write(NumberOfTokens)}
+		and
+			// handle the next input
+   			HandleInput()()
+		rap
+	
+	/*
+	 * handle the output side of the buffer
+	 */
+	HandleOutput()() 
+		|NumberOfTokens: Integer|
+		// confirm to the reader that the required tokens are available
+		Out?InspectTokenAvailability(NumberOfTokens | Status available(NumberOfTokens));
+		Out!TokensAvailable;
+		Out?ReleaseRoom;
+		// handle the read on the platform
+		Communication!ReleaseRoom(MapTo, NumberOfTokens, TokenSize){Status remove(NumberOfTokens)};
+		// continue with the next read
+		HandleOutput()()
+	
+
+		

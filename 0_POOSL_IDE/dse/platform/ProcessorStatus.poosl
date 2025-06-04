@@ -1,0 +1,165 @@
+import "../../libraries/performance.poosl"
+
+import "ScheduledTask.poosl"
+
+/*
+ * status and statistical monitoring for the processor
+ */
+data class ProcessorStatus extends LongRunTimeAverage
+
+variables 
+	ContextSwitchingCycles: Real, 
+	ExecutionCycles: Map, 
+	Frequency: Real, 
+	MemoryUsages: Map, 
+	PowerConsumption: Real, 
+	// is there a running task?
+	Running: Boolean, 
+	RunningTask: String
+	 
+methods
+
+	/*
+	 * get the context switching time
+	 */
+	getContextSwitchingTime : Real
+		return ContextSwitchingCycles / Frequency
+	
+	/* 
+	 * get the execution time of a task
+	 * if the task is preempted, return the remaining execution time
+	 */
+	getExecutionTime(Task: ScheduledTask) : Real
+		if Task getRemainingExecutionTime = nil then
+   			return ExecutionCycles at(Task getName) at(Task getScenario) / Frequency
+		else
+   			return Task getRemainingExecutionTime
+		fi
+	
+	/* 
+	 * get the memory usage of a task
+	 */
+	getMemoryUsage(Task: ScheduledTask) : Integer
+		return MemoryUsages at(Task getName) at(Task getScenario)
+	
+	/*
+	 * get the power consumption of the processor 
+	 */
+	getPowerConsumption : Real
+		return PowerConsumption
+	
+	/* 
+	 * change the status of the processor to idle at CurrentTime
+	 */
+	idle(CurrentTime: Real) : ProcessorStatus
+		Running := false;
+		RunningTask := nil;
+		// update the utilization status to the underlying LongRunTimeAverage performance monitor 
+		self rewardBM(0.0, CurrentTime);
+		return self
+	
+	/*
+	 * read processor profile
+	 */
+	readProcessorProfile(Type: String, VoltageScaleFactor: Real): ProcessorStatus 
+		| File: FileIn, Task: String |
+		// open the corresponding processor profile file
+		File := new(FileIn) source(Type + ".txt") open;
+		// read the data from the file
+		File readWord; // "Frequency"
+		Frequency := File readWord toInteger asReal; 
+		File readWord; // "Hz"
+		File readWord; // "ContextSwitchingtime" 
+		ContextSwitchingCycles := File readWord toInteger asReal; 
+		File readWord; // "Cycles" 
+		File readWord; // "PowerConsumption"
+		PowerConsumption := (File readWord toReal) * (VoltageScaleFactor power(3.0)); 
+		File readWord; // "Watt"	
+		File readWord; // "Task" 
+		File readWord; // "Cycles"
+		File readWord; // "Memory"
+		File readWord; // "Scenario"
+		File readWord; // "S1"
+		File readWord; // "S2"
+		File readWord; // "S1"
+		File readWord; // "S2"
+		ExecutionCycles := new(Map);
+		MemoryUsages := new(Map);
+		while !(File atEndOfFile) do
+			Task := File readWord;
+			if Task != nil then			// To avoid issues with white space after last line 
+				ExecutionCycles putAt(Task, new(Map));
+				MemoryUsages putAt(Task, new(Map));
+				ExecutionCycles at(Task) putAt("S1", File readWord toInteger asReal);
+				ExecutionCycles at(Task) putAt("S2", File readWord toInteger asReal);
+				MemoryUsages at(Task) putAt("S1", File readWord toInteger);
+				MemoryUsages at(Task) putAt("S2", File readWord toInteger)
+			fi
+		od;
+		File close;
+		return self
+
+	/*
+	 * initialisation of processor of type Type
+	 */
+	init(Type: String, VoltageScaleFactor: Real) : ProcessorStatus 
+		// check for known types
+		if (Type != "ARMv8") & (Type != "Adreno") & (Type != "MIPS") then self error("Unknown Processor Type") fi;
+		// read the corresponding processor profile file
+		self readProcessorProfile(Type, VoltageScaleFactor);
+		Running := false;
+		self withParameters(0.95, 0.95);
+		self setBatchSize(100);
+		return self
+
+	/*
+	 * log the data to file
+	 */
+	log() : ProcessorStatus
+		| File: FileOut |
+		File := new(FileOut) destination(self identity + ".log") open;
+		File write("Processor Utilisation Results:\n\nAverage Utilisation:\n" + self logStatistics);
+		File close;
+		return self
+
+	/*
+	 * check if a task is preempted or not
+	 */
+	notPreviouslyPreempted(Task: ScheduledTask) : Boolean
+		if Task getRemainingExecutionTime != nil then
+			return false
+		else
+			return true
+		fi
+
+	/*
+	 * generate a textual representation
+	 */
+	printString : String
+		if Running then
+			return "Processor is Executing Task " + RunningTask printString lf lf + "Average Utilisation:\n" + self printStatistics
+		else
+			return  "Processor is Idle\n\nAverage Utilisation:" lf + self printStatistics
+		fi
+
+	/*
+	 * run a task
+	 */
+	run(T: ScheduledTask, CurrentTime: Real) : ProcessorStatus
+		Running := true;
+		RunningTask := T getName;
+		// updae the utilization preformance monitor
+		self rewardBM(1.0, CurrentTime);
+		return self
+
+	/*
+	 * update status considering Task has been running for RunTime
+	 */
+	update(Task: ScheduledTask, RunTime: Real) : ProcessorStatus
+		if Task getRemainingExecutionTime = nil then
+			Task setRemainingExecutionTime((ExecutionCycles at(Task getName) at(Task getScenario) / Frequency) - RunTime)
+		else
+			Task setRemainingExecutionTime(Task getRemainingExecutionTime - RunTime)
+		fi;
+		return self
+		

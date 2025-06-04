@@ -1,0 +1,125 @@
+import "ScheduledTask.poosl"
+import "../../libraries/elements.poosl"
+
+/*
+ * model scheduler with priority based and first-come first-served scheduling policies
+ */
+data class SchedulerStatus extends Object
+
+variables 
+	// number of scheduled tasks
+	NumberOfTasks : Integer,
+	// linked list of scheduled tasks 
+	TaskList : StructureElement,
+	// scheduling policy 
+	Policy : String
+	
+methods
+
+	/*
+	 * initialisation
+	 * T: Scheduling policy, must be either "PB" or "FCFS"
+	 */
+	init(T : String) : SchedulerStatus
+		Policy := T ;
+		NumberOfTasks := 0 ;
+		TaskList := new(StructureElement);
+		TaskList setNext(TaskList) setPrevious(TaskList) ;
+		return self
+
+	/*
+	 * get the next task to schedule according to the scheduling policy
+	 */
+	nextTaskToSchedule : ScheduledTask
+		return(TaskList previous element)
+
+	/*
+	 * generate a textual representation
+	 */
+	printString : String 
+		| PrintOut : String, E : StructureElement |
+		PrintOut := "Operating System with Policy: " + Policy printString lf lf + "List of Waiting Tasks:" lf;
+		PrintOut := PrintOut + "( ";
+		E := TaskList previous;
+		while E != TaskList do
+			PrintOut := PrintOut + E element printString;
+			if E previous != TaskList then
+				PrintOut := PrintOut + ", "
+			fi ;
+			E := E previous
+		od;
+		PrintOut := PrintOut + " )";
+		return PrintOut
+
+	/*
+	 * add a task to be scheduled for execution
+	 */
+	registerTask(Task, Scenario: String, Iteration, Priority: Integer) : ScheduledTask 
+		| NewTask: ScheduledTask, NE, E: StructureElement, Found: Boolean |
+		// create a new ScheduleTask for the new task
+		NewTask := new(ScheduledTask) init(Task, Scenario, Iteration, Priority);
+		// create a new element to be added to the linked list
+		NE := new(StructureElement) setElement(NewTask) ;
+		// find place to insert the new task, depending on policy
+		if Policy = "FCFS" then
+			// for FCFS, it will be the last to be executed
+			E := TaskList
+		else
+			if Policy = "PB" then
+				// search for the right place according to priority. The scheduled tasks in the list are already ordered by priority.
+				E := TaskList next;
+				Found := false ;
+				// find the first task with lower priority
+				while (E != TaskList) &(Found not) do
+					if E element getPriority < Priority then
+						E := E next
+					else
+						Found := true
+					fi
+				od ;
+				E := E previous
+			else
+				self error("Unknown Scheduling Policy")
+			fi
+		fi ;
+		// insert the new scheduled task into the (double) linked list
+		NE setNext(E next) setPrevious(E) ;
+		E setNext(NE) ;
+		NE next setPrevious(NE) ;
+		// update the number of tasks
+		NumberOfTasks := NumberOfTasks + 1 ;
+		// return the newly created ScheduledTasks
+		return NewTask
+	
+	/*
+	 * remove a task from the scheduled list
+	 */
+	removeTask(OldTask : ScheduledTask) : Integer 
+		| E : Element |
+		// find it in the linked list
+		E := TaskList previous ;
+		while E element getName != OldTask getName do
+			E := E previous
+		od ;
+		// remove it from the linked list
+		E next setPrevious(E previous) ;
+		E previous setNext(E next) ;
+		// adjust number of tasks
+		NumberOfTasks := NumberOfTasks - 1 ;
+		// return the new number of tasks
+		return NumberOfTasks
+	
+	/*
+	 * update a task in the task list
+	 */
+	updateTask(Task : ScheduledTask) : SchedulerStatus 
+		| E : Element |
+		E := TaskList previous ;
+		while E != TaskList do
+			if E element getName = Task getName then
+				E setElement(Task)
+			fi ;
+			E := E previous
+		od ;
+		return self
+		
