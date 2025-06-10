@@ -45,14 +45,12 @@ Encapsulates the hardware and application configuration:
 - Applies task graph transformations (e.g., merging tasks 3 and 8).
 - Applies different mappings and priority assignments.
 - Compares configurations using a geometric mean metric:  
-  \[
-  \mu_{geometric} = \sqrt[4]{\frac{\Theta}{L_{avg} \cdot N \cdot E}}
-  \]
+  mu_geometric = (Theta/(N\*E\*L_avg))^(1/4)
   where:
-  - \(\Theta\): Throughput
-  - \(L_{avg}\): Average Latency
-  - \(N\): Number of Nodes
-  - \(E\): Energy
+  - Theta: Throughput
+  - L_avg: Average Latency
+  - N: Number of Nodes
+  - E: Energy
 
 
 ## Usage Instructions
